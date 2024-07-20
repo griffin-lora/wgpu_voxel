@@ -11,6 +11,7 @@
 #include <webgpu/wgpu.h>
 #include <GLFW/glfw3.h>
 #include <glfw3webgpu.h>
+#include <cglm/struct/vec2.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -22,6 +23,7 @@ static WGPUAdapter adapter;
 static WGPUDevice device;
 static WGPUQueue queue;
 static WGPURenderPipeline pipeline;
+static WGPUBuffer vertex_buffer;
 
 #define MAKE_REQUEST_CALLBACK(TYPE, VAR) \
 static void request_##VAR(WGPURequest##TYPE##Status, WGPU##TYPE local_##VAR, char const*, void*) { \
@@ -96,7 +98,6 @@ static result_t init_wgpu_core(void) {
     result_t result;
 
     if ((instance = wgpuCreateInstance(&(WGPUInstanceDescriptor) {
-        .nextInChain = NULL
     })) == NULL) {
         return result_instance_create_failure;
     }
@@ -106,7 +107,6 @@ static result_t init_wgpu_core(void) {
     }
 
     wgpuInstanceRequestAdapter(instance, &(WGPURequestAdapterOptions) {
-        .nextInChain = NULL,
         .compatibleSurface = surface
     }, request_adapter, NULL);
     if (adapter == NULL) {
@@ -114,7 +114,6 @@ static result_t init_wgpu_core(void) {
     }
 
     WGPUAdapterProperties adapter_properties = {
-        .nextInChain = NULL
     };
     wgpuAdapterGetProperties(adapter, &adapter_properties);
     if (adapter_properties.name) {
@@ -122,13 +121,9 @@ static result_t init_wgpu_core(void) {
     }
 
     wgpuAdapterRequestDevice(adapter, &(WGPUDeviceDescriptor) {
-        .nextInChain = NULL,
-        .label = "Main Device",
         .requiredFeatureCount = 0,
-        .requiredLimits = NULL,
+        .requiredLimits = NULL, // TODO: Like actually implement this
         .defaultQueue = {
-            .nextInChain = NULL,
-            .label = "Default Queue"
         },
         .deviceLostCallback = device_lost_callback
     }, request_device, NULL);
@@ -146,7 +141,6 @@ static result_t init_wgpu_core(void) {
     glfwGetMonitorContentScale(monitor, &x_scale, &y_scale);
 
     wgpuSurfaceConfigure(surface, &(WGPUSurfaceConfiguration) {
-        .nextInChain = NULL,
         .width = WINDOW_WIDTH * (uint32_t) x_scale,
         .height = WINDOW_HEIGHT * (uint32_t) y_scale,
         .format = surface_format,
@@ -178,10 +172,18 @@ static result_t init_wgpu_core(void) {
     }
 
     if ((pipeline = wgpuDeviceCreateRenderPipeline(device, &(WGPURenderPipelineDescriptor) {
-        .nextInChain = NULL,
         .vertex = {
-            .bufferCount = 0,
-            .buffers = NULL,
+            .bufferCount = 1,
+            .buffers = &(WGPUVertexBufferLayout) {
+                .attributeCount = 1,
+                .attributes = &(WGPUVertexAttribute) {
+                    .format = WGPUVertexFormat_Float32x2,
+                    .offset = 0,
+                    .shaderLocation = 0
+                },
+                .arrayStride = sizeof(vec2),
+                .stepMode = WGPUVertexStepMode_Vertex
+            },
             .module = vertex_shader_module,
             .entryPoint = "main",
             .constantCount = 0,
@@ -227,14 +229,58 @@ static result_t init_wgpu_core(void) {
         return result_render_pipeline_create_failure;
     }
 
-    // wgpuShaderModuleRelease(vertex_shader_module);
-    // wgpuShaderModuleRelease(fragment_shader_module);
+    wgpuShaderModuleRelease(vertex_shader_module);
+    wgpuShaderModuleRelease(fragment_shader_module);
+
+    vec2s vertices[3] = {
+        (vec2s) {{ -0.5f, -0.5f }},
+        (vec2s) {{ 0.5f, -0.5f }},
+        (vec2s) {{ 0.0f, 0.5f }},
+    };
+
+    WGPUBuffer vertex_staging_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc,
+        .size = sizeof(vertices),
+        .mappedAtCreation = false
+    });
+
+    vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+        .size = sizeof(vertices),
+        .mappedAtCreation = false
+    });
+    
+    if (vertex_staging_buffer == NULL || vertex_buffer == NULL) {
+        return result_buffer_create_failure;
+    }
+
+    wgpuQueueWriteBuffer(queue, vertex_staging_buffer, 0, vertices, sizeof(vertices));
+
+    WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {
+    });
+    if (command_encoder == NULL) {
+        return result_command_encoder_create_failure;
+    }
+
+    wgpuCommandEncoderCopyBufferToBuffer(command_encoder, vertex_staging_buffer, 0, vertex_buffer, 0, sizeof(vertices));
+
+    WGPUCommandBuffer command = wgpuCommandEncoderFinish(command_encoder, NULL);
+    if (command == NULL) {
+        return result_command_encoder_finish_failure;
+    }
+
+    wgpuCommandEncoderRelease(command_encoder);
+    wgpuQueueSubmit(queue, 1, &command);
+    wgpuCommandBufferRelease(command);
+
+    wgpuBufferRelease(vertex_staging_buffer);
 
     return result_success;
 }
 
 static void term_wgpu_core(void) {
     wgpuDevicePoll(device, true, NULL);
+    wgpuBufferRelease(vertex_buffer);
     wgpuRenderPipelineRelease(pipeline);
     wgpuQueueRelease(queue);
     wgpuDeviceRelease(device);
@@ -275,8 +321,6 @@ static result_t game_loop(void) {
         }
 
         WGPUTextureView surface_view = wgpuTextureCreateView(texture.texture, &(WGPUTextureViewDescriptor) {
-            .nextInChain = NULL,
-            .label = "Surface Texture View",
             .format = wgpuTextureGetFormat(texture.texture),
             .dimension = WGPUTextureViewDimension_2D,
             .baseMipLevel = 0,
@@ -291,8 +335,6 @@ static result_t game_loop(void) {
         }
 
         WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {
-            .nextInChain = NULL,
-            .label = "Render Command Encoder"
         });
 
         if (command_encoder == NULL) {
@@ -300,7 +342,6 @@ static result_t game_loop(void) {
         }
 
         WGPURenderPassEncoder render_pass_encoder = wgpuCommandEncoderBeginRenderPass(command_encoder, &(WGPURenderPassDescriptor) {
-            .nextInChain = NULL,
             .colorAttachmentCount = 1,
             .colorAttachments = &(WGPURenderPassColorAttachment) {
                 .view = surface_view,
@@ -318,14 +359,14 @@ static result_t game_loop(void) {
         }
 
         wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
+        wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, wgpuBufferGetSize(vertex_buffer));
+
         wgpuRenderPassEncoderDraw(render_pass_encoder, 3, 1, 0, 0);
 
         wgpuRenderPassEncoderEnd(render_pass_encoder);
         wgpuRenderPassEncoderRelease(render_pass_encoder);
 
         WGPUCommandBuffer command = wgpuCommandEncoderFinish(command_encoder, &(WGPUCommandBufferDescriptor) {
-            .nextInChain = NULL,
-            .label = "Render Command buffer"
         });
         
         if (command == NULL) {

@@ -13,6 +13,7 @@ static const char* get_result_string(result_t result) {
         case result_render_pass_encoder_create_failure: return "Failed to render pass encoder";
         case result_surface_texture_view_create_failure: return "Failed to create surface texture view";
         case result_shader_module_create_failure: return "Failed to create shader module";
+        case result_buffer_create_failure: return "Failed to create buffer";
 
         case result_adapter_request_failure: return "Failed to request adapter";
         case result_device_request_failure: return "Failed to request device";

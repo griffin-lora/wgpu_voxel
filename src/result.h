@@ -11,6 +11,7 @@ typedef enum {
     result_render_pass_encoder_create_failure,
     result_surface_texture_view_create_failure,
     result_shader_module_create_failure,
+    result_buffer_create_failure,
     
     result_adapter_request_failure,
     result_device_request_failure,
