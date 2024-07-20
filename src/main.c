@@ -3,9 +3,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <webgpu/webgpu.h>
 #include <webgpu/wgpu.h>
 #include <GLFW/glfw3.h>
 #include <glfw3webgpu.h>
+
+#define WINDOW_WIDTH 640
+#define WINDOW_HEIGHT 480
 
 static GLFWwindow* window;
 static WGPUInstance instance;
@@ -81,6 +85,19 @@ static result_t init_wgpu_core(void) {
         return result_device_request_failure;
     }
 
+    wgpuSurfaceConfigure(surface, &(WGPUSurfaceConfiguration) {
+        .nextInChain = NULL,
+        .width = WINDOW_WIDTH,
+        .height = WINDOW_HEIGHT,
+        .format = wgpuSurfaceGetPreferredFormat(surface, adapter),
+        .viewFormatCount = 0,
+        .viewFormats = NULL,
+        .usage = WGPUTextureUsage_RenderAttachment,
+        .device = device,
+        .presentMode = WGPUPresentMode_Fifo,
+        .alphaMode = WGPUCompositeAlphaMode_Auto
+    });
+
     wgpuAdapterRelease(adapter);
 
     wgpuDeviceSetUncapturedErrorCallback(device, error_callback, NULL);
@@ -91,34 +108,6 @@ static result_t init_wgpu_core(void) {
     
     wgpuQueueOnSubmittedWorkDone(queue, queue_work_done_callback, NULL);
 
-    {
-        WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {
-            .nextInChain = NULL,
-            .label = "Debug Command Encoder"
-        });
-
-        if (encoder == NULL) {
-            return result_command_encoder_create_failure;
-        }
-
-        wgpuCommandEncoderInsertDebugMarker(encoder, "Do first thing");
-        wgpuCommandEncoderInsertDebugMarker(encoder, "Do second thing");
-
-        WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &(WGPUCommandBufferDescriptor) {
-            .nextInChain = NULL,
-            .label = "Command buffer"
-        });
-        
-        if (command == NULL) {
-            return result_command_encoder_finish_failure;
-        }
-
-        wgpuCommandEncoderRelease(encoder);
-
-        wgpuQueueSubmit(queue, 1, &command);
-        wgpuCommandBufferRelease(command);
-    }
-
     return result_success;
 }
 
@@ -126,6 +115,7 @@ static void term_wgpu_core(void) {
     wgpuDevicePoll(device, true, NULL);
     wgpuQueueRelease(queue);
     wgpuDeviceRelease(device);
+    wgpuSurfaceUnconfigure(surface);
     wgpuSurfaceRelease(surface);
     wgpuInstanceRelease(instance);
 }
@@ -138,7 +128,7 @@ static result_t init_glfw_core(void) {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    window = glfwCreateWindow(640, 480, "Vulkan", NULL, NULL);
+    window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Vulkan", NULL, NULL);
     if (window == NULL) {
         return result_window_create_failure;
     }
@@ -150,10 +140,83 @@ static void term_glfw_core(void) {
     glfwTerminate();
 }
 
-static void game_loop(void) {
+static result_t game_loop(void) {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        WGPUSurfaceTexture texture;
+        wgpuSurfaceGetCurrentTexture(surface, &texture);
+
+        if (texture.status != WGPUSurfaceGetCurrentTextureStatus_Success) {
+            return result_surface_texture_get_failure;
+        }
+
+        WGPUTextureView surface_view = wgpuTextureCreateView(texture.texture, &(WGPUTextureViewDescriptor) {
+            .nextInChain = NULL,
+            .label = "Surface Texture View",
+            .format = wgpuTextureGetFormat(texture.texture),
+            .dimension = WGPUTextureViewDimension_2D,
+            .baseMipLevel = 0,
+            .mipLevelCount = 1,
+            .baseArrayLayer = 0,
+            .arrayLayerCount = 1,
+            .aspect = WGPUTextureAspect_All
+        });
+
+        if (surface_view == NULL) {
+            return result_surface_texture_view_create_failure;
+        }
+
+        WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {
+            .nextInChain = NULL,
+            .label = "Render Command Encoder"
+        });
+
+        if (command_encoder == NULL) {
+            return result_command_encoder_create_failure;
+        }
+
+        WGPURenderPassEncoder render_pass_encoder = wgpuCommandEncoderBeginRenderPass(command_encoder, &(WGPURenderPassDescriptor) {
+            .nextInChain = NULL,
+            .colorAttachmentCount = 1,
+            .colorAttachments = &(WGPURenderPassColorAttachment) {
+                .view = surface_view,
+                .resolveTarget = NULL,
+                .loadOp = WGPULoadOp_Clear,
+                .storeOp = WGPUStoreOp_Store,
+                .clearValue = (WGPUColor) { 0.9, 0.1, 0.2, 1.0 }
+            },
+            .depthStencilAttachment = NULL,
+            .timestampWrites = NULL // TODO: Implement later
+        });
+
+        if (render_pass_encoder == NULL) {
+            return result_render_pass_encoder_create_failure;
+        }
+
+        wgpuRenderPassEncoderEnd(render_pass_encoder);
+        wgpuRenderPassEncoderRelease(render_pass_encoder);
+
+        WGPUCommandBuffer command = wgpuCommandEncoderFinish(command_encoder, &(WGPUCommandBufferDescriptor) {
+            .nextInChain = NULL,
+            .label = "Render Command buffer"
+        });
+        
+        if (command == NULL) {
+            return result_command_encoder_finish_failure;
+        }
+
+        wgpuCommandEncoderRelease(command_encoder);
+
+        wgpuQueueSubmit(queue, 1, &command);
+        wgpuCommandBufferRelease(command);
+
+        wgpuSurfacePresent(surface);
+
+        wgpuTextureViewRelease(surface_view);
     }
+
+    return result_success;
 }
 
 int main() {
@@ -167,8 +230,11 @@ int main() {
         print_result_error(result);
         return 1;
     }
-    
-    game_loop();
+
+    if ((result = game_loop()) != result_success) {
+        print_result_error(result);
+        return 1;
+    }
 
     term_wgpu_core();
     term_glfw_core();
