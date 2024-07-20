@@ -1,5 +1,6 @@
 #include "result.h"
 #include <GLFW/glfw3native.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -61,10 +62,9 @@ static result_t create_shader_module(const char* path, WGPUShaderModule* shader_
     stat(path, &st);
 
     size_t num_bytes = (size_t)st.st_size;
-    size_t aligned_num_bytes = num_bytes % 32ul == 0 ? num_bytes : num_bytes + (32ul - (num_bytes % 32ul));
 
-    uint32_t* bytes = malloc(aligned_num_bytes);
-    memset(bytes, 0, aligned_num_bytes);
+    uint32_t* bytes = malloc(num_bytes);
+    memset(bytes, 0, num_bytes);
     if (fread(bytes, num_bytes, 1, file) != 1) {
         return result_file_read_failure;
     }
@@ -76,7 +76,7 @@ static result_t create_shader_module(const char* path, WGPUShaderModule* shader_
             .chain = {
                 .sType = WGPUSType_ShaderModuleSPIRVDescriptor
             },
-            .codeSize = (uint32_t) aligned_num_bytes,
+            .codeSize = (uint32_t) num_bytes / sizeof(uint32_t),
             .code = bytes
         }),
         .hintCount = 0,
