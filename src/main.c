@@ -138,10 +138,17 @@ static result_t init_wgpu_core(void) {
 
     WGPUTextureFormat surface_format = wgpuSurfaceGetPreferredFormat(surface, adapter);
 
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+
+    float x_scale;
+    float y_scale;
+
+    glfwGetMonitorContentScale(monitor, &x_scale, &y_scale);
+
     wgpuSurfaceConfigure(surface, &(WGPUSurfaceConfiguration) {
         .nextInChain = NULL,
-        .width = WINDOW_WIDTH,
-        .height = WINDOW_HEIGHT,
+        .width = WINDOW_WIDTH * (uint32_t) x_scale,
+        .height = WINDOW_HEIGHT * (uint32_t) y_scale,
         .format = surface_format,
         .viewFormatCount = 0,
         .viewFormats = NULL,
