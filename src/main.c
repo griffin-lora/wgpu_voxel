@@ -24,13 +24,18 @@ static WGPUDevice device;
 static WGPUQueue queue;
 static WGPURenderPipeline pipeline;
 static WGPUBuffer vertex_buffer;
+static WGPUBuffer index_buffer;
 
 typedef struct {
     vec2s position;
     vec3s color;
 } vertex_t;
 
-static vertex_t vertices[6];
+static vertex_t vertices[4];
+static uint16_t indices[6] = {
+    0, 1, 2,
+    0, 2, 3
+};
 
 #define MAKE_REQUEST_CALLBACK(TYPE, VAR) \
 static void request_##VAR(WGPURequest##TYPE##Status, WGPU##TYPE local_##VAR, char const*, void*) { \
@@ -259,14 +264,6 @@ static result_t init_wgpu_core(void) {
         (vec3s) {{ 0.0f, 1.0f, 1.0f }}
     };
     vertices[3] = (vertex_t) {
-        (vec2s) {{ -0.5f, -0.5f }},
-        (vec3s) {{ 0.0f, 1.0f, 1.0f }},
-    };
-    vertices[4] = (vertex_t) {
-        (vec2s) {{ 0.5f, 0.5f }},
-        (vec3s) {{ 0.0f, 1.0f, 1.0f }},
-    };
-    vertices[5] = (vertex_t) {
         (vec2s) {{ -0.5f, 0.5f }},
         (vec3s) {{ 0.0f, 1.0f, 0.0f }},
     };
@@ -277,17 +274,30 @@ static result_t init_wgpu_core(void) {
         .mappedAtCreation = false
     });
 
+    WGPUBuffer index_staging_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc,
+        .size = sizeof(indices),
+        .mappedAtCreation = false
+    });
+
     vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
         .size = sizeof(vertices),
         .mappedAtCreation = false
     });
+
+    index_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
+        .size = sizeof(indices),
+        .mappedAtCreation = false
+    });
     
-    if (vertex_staging_buffer == NULL || vertex_buffer == NULL) {
+    if (vertex_staging_buffer == NULL || vertex_buffer == NULL || index_staging_buffer == NULL || index_buffer == NULL) {
         return result_buffer_create_failure;
     }
 
     wgpuQueueWriteBuffer(queue, vertex_staging_buffer, 0, vertices, sizeof(vertices));
+    wgpuQueueWriteBuffer(queue, index_staging_buffer, 0, indices, sizeof(indices));
 
     WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {
     });
@@ -296,6 +306,7 @@ static result_t init_wgpu_core(void) {
     }
 
     wgpuCommandEncoderCopyBufferToBuffer(command_encoder, vertex_staging_buffer, 0, vertex_buffer, 0, sizeof(vertices));
+    wgpuCommandEncoderCopyBufferToBuffer(command_encoder, index_staging_buffer, 0, index_buffer, 0, sizeof(indices));
 
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(command_encoder, NULL);
     if (command == NULL) {
@@ -314,6 +325,7 @@ static result_t init_wgpu_core(void) {
 static void term_wgpu_core(void) {
     wgpuDevicePoll(device, true, NULL);
     wgpuBufferRelease(vertex_buffer);
+    wgpuBufferRelease(index_buffer);
     wgpuRenderPipelineRelease(pipeline);
     wgpuQueueRelease(queue);
     wgpuDeviceRelease(device);
@@ -393,8 +405,9 @@ static result_t game_loop(void) {
 
         wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
         wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, sizeof(vertices));
+        wgpuRenderPassEncoderSetIndexBuffer(render_pass_encoder, index_buffer, WGPUIndexFormat_Uint16, 0, sizeof(indices));
 
-        wgpuRenderPassEncoderDraw(render_pass_encoder, sizeof(vertices) / sizeof(*vertices), 1, 0, 0);
+        wgpuRenderPassEncoderDrawIndexed(render_pass_encoder, sizeof(indices) / sizeof(*indices), 1, 0, 0, 0);
 
         wgpuRenderPassEncoderEnd(render_pass_encoder);
         wgpuRenderPassEncoderRelease(render_pass_encoder);
