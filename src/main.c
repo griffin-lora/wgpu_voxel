@@ -25,6 +25,13 @@ static WGPUQueue queue;
 static WGPURenderPipeline pipeline;
 static WGPUBuffer vertex_buffer;
 
+typedef struct {
+    vec2s position;
+    vec3s color;
+} vertex_t;
+
+static vertex_t vertices[6];
+
 #define MAKE_REQUEST_CALLBACK(TYPE, VAR) \
 static void request_##VAR(WGPURequest##TYPE##Status, WGPU##TYPE local_##VAR, char const*, void*) { \
     VAR = local_##VAR; \
@@ -175,13 +182,20 @@ static result_t init_wgpu_core(void) {
         .vertex = {
             .bufferCount = 1,
             .buffers = &(WGPUVertexBufferLayout) {
-                .attributeCount = 1,
-                .attributes = &(WGPUVertexAttribute) {
-                    .format = WGPUVertexFormat_Float32x2,
-                    .offset = 0,
-                    .shaderLocation = 0
+                .attributeCount = 2,
+                .attributes = (WGPUVertexAttribute[2]) {
+                    {
+                        .format = WGPUVertexFormat_Float32x2,
+                        .offset = 0,
+                        .shaderLocation = 0
+                    },
+                    {
+                        .format = WGPUVertexFormat_Float32x3,
+                        .offset = sizeof(vertices->position),
+                        .shaderLocation = 1
+                    }
                 },
-                .arrayStride = sizeof(vec2),
+                .arrayStride = sizeof(*vertices),
                 .stepMode = WGPUVertexStepMode_Vertex
             },
             .module = vertex_shader_module,
@@ -232,10 +246,29 @@ static result_t init_wgpu_core(void) {
     wgpuShaderModuleRelease(vertex_shader_module);
     wgpuShaderModuleRelease(fragment_shader_module);
 
-    vec2s vertices[3] = {
+    vertices[0] = (vertex_t) {
         (vec2s) {{ -0.5f, -0.5f }},
+        (vec3s) {{ 0.0f, 1.0f, 1.0f }},
+    };
+    vertices[1] = (vertex_t) {
         (vec2s) {{ 0.5f, -0.5f }},
-        (vec2s) {{ 0.0f, 0.5f }},
+        (vec3s) {{ 0.0f, 0.0f, 1.0f }}
+    };
+    vertices[2] = (vertex_t) {
+        (vec2s) {{ 0.5f, 0.5f }},
+        (vec3s) {{ 0.0f, 1.0f, 1.0f }}
+    };
+    vertices[3] = (vertex_t) {
+        (vec2s) {{ -0.5f, -0.5f }},
+        (vec3s) {{ 0.0f, 1.0f, 1.0f }},
+    };
+    vertices[4] = (vertex_t) {
+        (vec2s) {{ 0.5f, 0.5f }},
+        (vec3s) {{ 0.0f, 1.0f, 1.0f }},
+    };
+    vertices[5] = (vertex_t) {
+        (vec2s) {{ -0.5f, 0.5f }},
+        (vec3s) {{ 0.0f, 1.0f, 0.0f }},
     };
 
     WGPUBuffer vertex_staging_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
@@ -359,9 +392,9 @@ static result_t game_loop(void) {
         }
 
         wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
-        wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, wgpuBufferGetSize(vertex_buffer));
+        wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, sizeof(vertices));
 
-        wgpuRenderPassEncoderDraw(render_pass_encoder, 3, 1, 0, 0);
+        wgpuRenderPassEncoderDraw(render_pass_encoder, sizeof(vertices) / sizeof(*vertices), 1, 0, 0);
 
         wgpuRenderPassEncoderEnd(render_pass_encoder);
         wgpuRenderPassEncoderRelease(render_pass_encoder);
