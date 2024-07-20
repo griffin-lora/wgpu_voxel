@@ -1,5 +1,8 @@
 #include "result.h"
 #include <GLFW/glfw3native.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -17,6 +20,7 @@ static WGPUSurface surface;
 static WGPUAdapter adapter;
 static WGPUDevice device;
 static WGPUQueue queue;
+static WGPURenderPipeline pipeline;
 
 #define MAKE_REQUEST_CALLBACK(TYPE, VAR) \
 static void request_##VAR(WGPURequest##TYPE##Status, WGPU##TYPE local_##VAR, char const*, void*) { \
@@ -43,7 +47,54 @@ static void queue_work_done_callback(WGPUQueueWorkDoneStatus status, void*) {
     }
 }
 
+static result_t create_shader_module(const char* path, WGPUShaderModule* shader_module) {
+    if (access(path, F_OK) != 0) {
+        return result_file_access_failure;
+    }
+
+    FILE* file = fopen(path, "rb");
+    if (file == NULL) {
+        return result_file_open_failure;
+    }
+
+    struct stat st;
+    stat(path, &st);
+
+    size_t num_bytes = (size_t)st.st_size;
+    size_t aligned_num_bytes = num_bytes % 32ul == 0 ? num_bytes : num_bytes + (32ul - (num_bytes % 32ul));
+
+    uint32_t* bytes = malloc(aligned_num_bytes);
+    memset(bytes, 0, aligned_num_bytes);
+    if (fread(bytes, num_bytes, 1, file) != 1) {
+        return result_file_read_failure;
+    }
+
+    fclose(file);
+
+    WGPUShaderModule module = wgpuDeviceCreateShaderModule(device, &(WGPUShaderModuleDescriptor) {
+        .nextInChain = (const WGPUChainedStruct*) (&(WGPUShaderModuleSPIRVDescriptor) {
+            .chain = {
+                .sType = WGPUSType_ShaderModuleSPIRVDescriptor
+            },
+            .codeSize = (uint32_t) aligned_num_bytes,
+            .code = bytes
+        }),
+        .hintCount = 0,
+        .hints = NULL
+    });
+
+    if (module == NULL) {
+        return result_shader_module_create_failure;
+    }
+
+    *shader_module = module;
+
+    return result_success;
+}
+
 static result_t init_wgpu_core(void) {
+    result_t result;
+
     if ((instance = wgpuCreateInstance(&(WGPUInstanceDescriptor) {
         .nextInChain = NULL
     })) == NULL) {
@@ -85,11 +136,13 @@ static result_t init_wgpu_core(void) {
         return result_device_request_failure;
     }
 
+    WGPUTextureFormat surface_format = wgpuSurfaceGetPreferredFormat(surface, adapter);
+
     wgpuSurfaceConfigure(surface, &(WGPUSurfaceConfiguration) {
         .nextInChain = NULL,
         .width = WINDOW_WIDTH,
         .height = WINDOW_HEIGHT,
-        .format = wgpuSurfaceGetPreferredFormat(surface, adapter),
+        .format = surface_format,
         .viewFormatCount = 0,
         .viewFormats = NULL,
         .usage = WGPUTextureUsage_RenderAttachment,
@@ -108,11 +161,74 @@ static result_t init_wgpu_core(void) {
     
     wgpuQueueOnSubmittedWorkDone(queue, queue_work_done_callback, NULL);
 
+    WGPUShaderModule vertex_shader_module;
+    WGPUShaderModule fragment_shader_module;
+    if ((result = create_shader_module("shader/vertex.spv", &vertex_shader_module)) != result_success) {
+        return result;
+    }
+    if ((result = create_shader_module("shader/fragment.spv", &fragment_shader_module)) != result_success) {
+        return result;
+    }
+
+    if ((pipeline = wgpuDeviceCreateRenderPipeline(device, &(WGPURenderPipelineDescriptor) {
+        .nextInChain = NULL,
+        .vertex = {
+            .bufferCount = 0,
+            .buffers = NULL,
+            .module = vertex_shader_module,
+            .entryPoint = "main",
+            .constantCount = 0,
+            .constants = NULL
+        },
+        .primitive = {
+            .topology = WGPUPrimitiveTopology_TriangleList,
+            .stripIndexFormat = WGPUIndexFormat_Undefined,
+            .frontFace = WGPUFrontFace_CCW,
+            .cullMode = WGPUCullMode_None // TODO: Update this
+        },
+        .fragment = &(WGPUFragmentState) {
+            .module = fragment_shader_module,
+            .entryPoint = "main",
+            .constantCount = 0,
+            .constants = NULL,
+            .targetCount = 1,
+            .targets = &(WGPUColorTargetState) {
+                .format = surface_format,
+                .blend = &(WGPUBlendState) {
+                    .color = {
+                        .srcFactor = WGPUBlendFactor_SrcAlpha,
+                        .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+                        .operation = WGPUBlendOperation_Add
+                    },
+                    .alpha = {
+                        .srcFactor = WGPUBlendFactor_Zero,
+                        .dstFactor = WGPUBlendFactor_One,
+                        .operation = WGPUBlendOperation_Add
+                    }
+                },
+                .writeMask = WGPUColorWriteMask_All
+            }
+        },
+        .multisample = {
+            .count = 1,
+            .mask = ~0u,
+            .alphaToCoverageEnabled = false
+        },
+        .depthStencil = NULL,
+        .layout = NULL
+    })) == NULL) {
+        return result_render_pipeline_create_failure;
+    }
+
+    // wgpuShaderModuleRelease(vertex_shader_module);
+    // wgpuShaderModuleRelease(fragment_shader_module);
+
     return result_success;
 }
 
 static void term_wgpu_core(void) {
     wgpuDevicePoll(device, true, NULL);
+    wgpuRenderPipelineRelease(pipeline);
     wgpuQueueRelease(queue);
     wgpuDeviceRelease(device);
     wgpuSurfaceUnconfigure(surface);
@@ -193,6 +309,9 @@ static result_t game_loop(void) {
         if (render_pass_encoder == NULL) {
             return result_render_pass_encoder_create_failure;
         }
+
+        wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
+        wgpuRenderPassEncoderDraw(render_pass_encoder, 3, 1, 0, 0);
 
         wgpuRenderPassEncoderEnd(render_pass_encoder);
         wgpuRenderPassEncoderRelease(render_pass_encoder);
