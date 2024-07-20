@@ -268,56 +268,27 @@ static result_t init_wgpu_core(void) {
         (vec3s) {{ 0.0f, 1.0f, 0.0f }},
     };
 
-    WGPUBuffer vertex_staging_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc,
-        .size = sizeof(vertices),
-        .mappedAtCreation = false
-    });
-
-    WGPUBuffer index_staging_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc,
-        .size = sizeof(indices),
-        .mappedAtCreation = false
-    });
-
     vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+        .usage = WGPUBufferUsage_Vertex,
         .size = sizeof(vertices),
-        .mappedAtCreation = false
+        .mappedAtCreation = true
     });
 
     index_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
         .size = sizeof(indices),
-        .mappedAtCreation = false
+        .mappedAtCreation = true
     });
     
-    if (vertex_staging_buffer == NULL || vertex_buffer == NULL || index_staging_buffer == NULL || index_buffer == NULL) {
+    if (vertex_buffer == NULL || index_buffer == NULL) {
         return result_buffer_create_failure;
     }
 
-    wgpuQueueWriteBuffer(queue, vertex_staging_buffer, 0, vertices, sizeof(vertices));
-    wgpuQueueWriteBuffer(queue, index_staging_buffer, 0, indices, sizeof(indices));
+    memcpy(wgpuBufferGetMappedRange(vertex_buffer, 0, sizeof(vertices)), vertices, sizeof(vertices));
+    memcpy(wgpuBufferGetMappedRange(index_buffer, 0, sizeof(indices)), indices, sizeof(indices));
 
-    WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {
-    });
-    if (command_encoder == NULL) {
-        return result_command_encoder_create_failure;
-    }
-
-    wgpuCommandEncoderCopyBufferToBuffer(command_encoder, vertex_staging_buffer, 0, vertex_buffer, 0, sizeof(vertices));
-    wgpuCommandEncoderCopyBufferToBuffer(command_encoder, index_staging_buffer, 0, index_buffer, 0, sizeof(indices));
-
-    WGPUCommandBuffer command = wgpuCommandEncoderFinish(command_encoder, NULL);
-    if (command == NULL) {
-        return result_command_encoder_finish_failure;
-    }
-
-    wgpuCommandEncoderRelease(command_encoder);
-    wgpuQueueSubmit(queue, 1, &command);
-    wgpuCommandBufferRelease(command);
-
-    wgpuBufferRelease(vertex_staging_buffer);
+    wgpuBufferUnmap(vertex_buffer);
+    wgpuBufferUnmap(index_buffer);
 
     return result_success;
 }
@@ -402,7 +373,7 @@ static result_t game_loop(void) {
         if (render_pass_encoder == NULL) {
             return result_render_pass_encoder_create_failure;
         }
-
+        
         wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
         wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, sizeof(vertices));
         wgpuRenderPassEncoderSetIndexBuffer(render_pass_encoder, index_buffer, WGPUIndexFormat_Uint16, 0, sizeof(indices));
