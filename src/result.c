@@ -22,6 +22,7 @@ static const char* get_result_string(result_t result) {
         case result_device_request_failure: return "Failed to request device";
 
         case result_surface_get_failure: return "Failed to get surface";
+        case result_surface_capabilities_get_failure: return "Failed to get surface capabilities";
         case result_queue_get_failure: return "Failed to get queue";
         case result_surface_texture_get_failure: return "Failed to get surface texture";
         case result_adapter_limits_get_failure: return "Failed to get adapter limits";

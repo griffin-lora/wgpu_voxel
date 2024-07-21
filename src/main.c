@@ -7,8 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include <webgpu/webgpu.h>
-#include <webgpu/wgpu.h>
+#include <dawn/webgpu.h>
 #include <GLFW/glfw3.h>
 #include <glfw3webgpu.h>
 #include <cglm/struct/vec2.h>
@@ -53,7 +52,11 @@ static void request_##VAR(WGPURequest##TYPE##Status, WGPU##TYPE local_##VAR, cha
 MAKE_REQUEST_CALLBACK(Adapter, adapter)
 MAKE_REQUEST_CALLBACK(Device, device)
 
-static void device_lost_callback(WGPUDeviceLostReason reason, const char* msg, void*) {
+static void device_lost_callback(const WGPUDevice*, WGPUDeviceLostReason reason, const char* msg, void*) {
+    if (reason == WGPUDeviceLostReason_Destroyed) {
+        return;
+    }
+
     printf("Device was lost for reason 0x%x with message %s\n", reason, msg);
     exit(1);
 }
@@ -63,11 +66,13 @@ static void error_callback(WGPUErrorType type, const char* msg, void*) {
     exit(1);
 }
 
-static void queue_work_done_callback(WGPUQueueWorkDoneStatus status, void*) {
-    if (status != WGPUQueueWorkDoneStatus_Success) {
-        printf("Queue work submitted with status 0x%x\n", status);
-        exit(1);
+static void queue_work_done_callback(WGPUQueueWorkDoneStatus status, void*, void*) {
+    if (status == WGPUQueueWorkDoneStatus_Success) {
+        return;
     }
+
+    printf("Queue work submitted with status 0x%x\n", status);
+    exit(1);
 }
 
 static result_t create_shader_module(const char* path, WGPUShaderModule* shader_module) {
@@ -100,9 +105,7 @@ static result_t create_shader_module(const char* path, WGPUShaderModule* shader_
             },
             .codeSize = (uint32_t) num_bytes / sizeof(uint32_t),
             .code = bytes
-        }),
-        .hintCount = 0,
-        .hints = NULL
+        })
     });
 
     if (module == NULL) {
@@ -180,14 +183,14 @@ static result_t init_wgpu_core(void) {
         return result_adapter_request_failure;
     }
 
-    WGPUAdapterProperties adapter_properties = {};
-    wgpuAdapterGetProperties(adapter, &adapter_properties);
-    if (adapter_properties.name) {
-        printf("Adapter name: %s\n", adapter_properties.name);
+    WGPUAdapterInfo adapter_info = {};
+    wgpuAdapterGetInfo(adapter, &adapter_info);
+    if (adapter_info.device) {
+        printf("Adapter name: %s\n", adapter_info.device);
     }
 
     WGPUSupportedLimits supported_limits = {};
-    if (!wgpuAdapterGetLimits(adapter, &supported_limits)) {
+    if (wgpuAdapterGetLimits(adapter, &supported_limits) != WGPUStatus_Success) {
         return result_adapter_limits_get_failure;
     }
 
@@ -197,13 +200,24 @@ static result_t init_wgpu_core(void) {
         .requiredFeatureCount = 0,
         .requiredLimits = &required_limits,
         .defaultQueue = {},
-        .deviceLostCallback = device_lost_callback
+        .deviceLostCallbackInfo = {
+            .callback = device_lost_callback,
+            .mode = WGPUCallbackMode_AllowSpontaneous
+        },
+        .uncapturedErrorCallbackInfo = {
+            .callback = error_callback
+        }
     }, request_device, NULL);
     if (device == NULL) {
         return result_device_request_failure;
     }
 
-    WGPUTextureFormat surface_format = wgpuSurfaceGetPreferredFormat(surface, adapter);
+    WGPUSurfaceCapabilities surface_capabilities;
+    if (wgpuSurfaceGetCapabilities(surface, adapter, &surface_capabilities) != WGPUStatus_Success) {
+        return result_surface_capabilities_get_failure;
+    }
+
+    WGPUTextureFormat surface_format = surface_capabilities.formats[0];
 
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 
@@ -226,13 +240,14 @@ static result_t init_wgpu_core(void) {
 
     wgpuAdapterRelease(adapter);
 
-    wgpuDeviceSetUncapturedErrorCallback(device, error_callback, NULL);
-
     if ((queue = wgpuDeviceGetQueue(device)) == NULL) {
         return result_queue_get_failure;
     }
     
-    wgpuQueueOnSubmittedWorkDone(queue, queue_work_done_callback, NULL);
+    wgpuQueueOnSubmittedWorkDone2(queue, (WGPUQueueWorkDoneCallbackInfo2) {
+        .callback = queue_work_done_callback,
+        .mode = WGPUCallbackMode_AllowSpontaneous
+    });
 
     vertices[0] = (vertex_t) {
         (vec2s) {{ -0.5f, -0.5f }},
@@ -403,7 +418,7 @@ static result_t init_wgpu_core(void) {
 }
 
 static void term_wgpu_core(void) {
-    wgpuDevicePoll(device, true, NULL);
+    wgpuDeviceTick(device);
     wgpuBindGroupRelease(bind_group);
     wgpuBufferRelease(vertex_buffer);
     wgpuBufferRelease(index_buffer);
@@ -478,7 +493,8 @@ static result_t game_loop(void) {
                 .resolveTarget = NULL,
                 .loadOp = WGPULoadOp_Clear,
                 .storeOp = WGPUStoreOp_Store,
-                .clearValue = (WGPUColor) { 0.9, 0.1, 0.2, 1.0 }
+                .clearValue = (WGPUColor) { 0.9, 0.1, 0.2, 1.0 },
+                .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
             },
             .depthStencilAttachment = NULL,
             .timestampWrites = NULL // TODO: Implement later
