@@ -24,6 +24,7 @@ static const char* get_result_string(result_t result) {
         case result_surface_get_failure: return "Failed to get surface";
         case result_queue_get_failure: return "Failed to get queue";
         case result_surface_texture_get_failure: return "Failed to get surface texture";
+        case result_adapter_limits_get_failure: return "Failed to get adapter limits";
 
         case result_command_encoder_finish_failure: return "Failed to finish command encoder";
 

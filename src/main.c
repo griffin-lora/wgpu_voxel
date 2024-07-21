@@ -187,7 +187,9 @@ static result_t init_wgpu_core(void) {
     }
 
     WGPUSupportedLimits supported_limits = {};
-    wgpuAdapterGetLimits(adapter, &supported_limits);
+    if (!wgpuAdapterGetLimits(adapter, &supported_limits)) {
+        return result_adapter_limits_get_failure;
+    }
 
     WGPURequiredLimits required_limits = get_required_limits(&supported_limits);
 
