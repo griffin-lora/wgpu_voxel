@@ -410,8 +410,8 @@ static result_t init_wgpu_core(void) {
     wgpuShaderModuleRelease(vertex_shader_module);
     wgpuShaderModuleRelease(fragment_shader_module);
 
-    // wgpuBindGroupLayoutRelease(bind_group_layout);
-    // wgpuPipelineLayoutRelease(pipeline_layout);
+    wgpuBindGroupLayoutRelease(bind_group_layout);
+    wgpuPipelineLayoutRelease(pipeline_layout);
 
     return result_success;
 }
