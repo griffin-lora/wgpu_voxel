@@ -12,6 +12,9 @@ typedef enum {
     result_surface_texture_view_create_failure,
     result_shader_module_create_failure,
     result_buffer_create_failure,
+    result_bind_group_layout_create_failure,
+    result_pipeline_layout_create_failure,
+    result_bind_group_create_failure,
     
     result_adapter_request_failure,
     result_device_request_failure,

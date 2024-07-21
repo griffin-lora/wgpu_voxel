@@ -25,6 +25,8 @@ static WGPUQueue queue;
 static WGPURenderPipeline pipeline;
 static WGPUBuffer vertex_buffer;
 static WGPUBuffer index_buffer;
+static WGPUBuffer uniform_buffer;
+static WGPUBindGroup bind_group;
 
 typedef struct {
     vec2s position;
@@ -36,6 +38,12 @@ static uint16_t indices[6] = {
     0, 1, 2,
     0, 2, 3
 };
+
+typedef struct {
+    float time;
+} uniform_t;
+
+static uniform_t uniform;
 
 #define MAKE_REQUEST_CALLBACK(TYPE, VAR) \
 static void request_##VAR(WGPURequest##TYPE##Status, WGPU##TYPE local_##VAR, char const*, void*) { \
@@ -174,6 +182,51 @@ static result_t init_wgpu_core(void) {
     
     wgpuQueueOnSubmittedWorkDone(queue, queue_work_done_callback, NULL);
 
+    vertices[0] = (vertex_t) {
+        (vec2s) {{ -0.5f, -0.5f }},
+        (vec3s) {{ 0.0f, 1.0f, 1.0f }},
+    };
+    vertices[1] = (vertex_t) {
+        (vec2s) {{ 0.5f, -0.5f }},
+        (vec3s) {{ 0.0f, 0.0f, 1.0f }}
+    };
+    vertices[2] = (vertex_t) {
+        (vec2s) {{ 0.5f, 0.5f }},
+        (vec3s) {{ 0.0f, 1.0f, 1.0f }}
+    };
+    vertices[3] = (vertex_t) {
+        (vec2s) {{ -0.5f, 0.5f }},
+        (vec3s) {{ 0.0f, 1.0f, 0.0f }},
+    };
+
+    vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_Vertex,
+        .size = sizeof(vertices),
+        .mappedAtCreation = true
+    });
+
+    index_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_Index,
+        .size = sizeof(indices),
+        .mappedAtCreation = true
+    });
+
+    uniform_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+        .size = sizeof(uniform),
+        .mappedAtCreation = false
+    });
+    
+    if (vertex_buffer == NULL || index_buffer == NULL || uniform_buffer == NULL) {
+        return result_buffer_create_failure;
+    }
+
+    memcpy(wgpuBufferGetMappedRange(vertex_buffer, 0, sizeof(vertices)), vertices, sizeof(vertices));
+    memcpy(wgpuBufferGetMappedRange(index_buffer, 0, sizeof(indices)), indices, sizeof(indices));
+
+    wgpuBufferUnmap(vertex_buffer);
+    wgpuBufferUnmap(index_buffer);
+
     WGPUShaderModule vertex_shader_module;
     WGPUShaderModule fragment_shader_module;
     if ((result = create_shader_module("shader/vertex.spv", &vertex_shader_module)) != result_success) {
@@ -183,7 +236,47 @@ static result_t init_wgpu_core(void) {
         return result;
     }
 
+    WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &(WGPUBindGroupLayoutDescriptor) {
+        .label = "Bind group layout",
+        .entryCount = 1,
+        .entries = &(WGPUBindGroupLayoutEntry) {
+            .binding = 0,
+            .visibility = WGPUShaderStage_Vertex,
+            .buffer = {
+                .type = WGPUBufferBindingType_Uniform,
+                .minBindingSize = sizeof(uniform_t)
+            }
+        }
+    });
+
+    if (bind_group_layout == NULL) {
+        return result_bind_group_layout_create_failure;
+    }
+    
+    WGPUPipelineLayout pipeline_layout = wgpuDeviceCreatePipelineLayout(device, &(WGPUPipelineLayoutDescriptor) {
+        .bindGroupLayoutCount = 1,
+        .bindGroupLayouts = &bind_group_layout
+    });
+
+    if (pipeline_layout == NULL) {
+        return result_pipeline_layout_create_failure;
+    }
+
+    if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
+        .layout = bind_group_layout,
+        .entryCount = 1,
+        .entries = &(WGPUBindGroupEntry) {
+            .binding = 0,
+            .buffer = uniform_buffer,
+            .offset = 0,
+            .size = sizeof(uniform_t)
+        }
+    })) == NULL) {
+        return result_bind_group_create_failure;
+    }
+
     if ((pipeline = wgpuDeviceCreateRenderPipeline(device, &(WGPURenderPipelineDescriptor) {
+        .layout = pipeline_layout,
         .vertex = {
             .bufferCount = 1,
             .buffers = &(WGPUVertexBufferLayout) {
@@ -251,52 +344,18 @@ static result_t init_wgpu_core(void) {
     wgpuShaderModuleRelease(vertex_shader_module);
     wgpuShaderModuleRelease(fragment_shader_module);
 
-    vertices[0] = (vertex_t) {
-        (vec2s) {{ -0.5f, -0.5f }},
-        (vec3s) {{ 0.0f, 1.0f, 1.0f }},
-    };
-    vertices[1] = (vertex_t) {
-        (vec2s) {{ 0.5f, -0.5f }},
-        (vec3s) {{ 0.0f, 0.0f, 1.0f }}
-    };
-    vertices[2] = (vertex_t) {
-        (vec2s) {{ 0.5f, 0.5f }},
-        (vec3s) {{ 0.0f, 1.0f, 1.0f }}
-    };
-    vertices[3] = (vertex_t) {
-        (vec2s) {{ -0.5f, 0.5f }},
-        (vec3s) {{ 0.0f, 1.0f, 0.0f }},
-    };
-
-    vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_Vertex,
-        .size = sizeof(vertices),
-        .mappedAtCreation = true
-    });
-
-    index_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-        .size = sizeof(indices),
-        .mappedAtCreation = true
-    });
-    
-    if (vertex_buffer == NULL || index_buffer == NULL) {
-        return result_buffer_create_failure;
-    }
-
-    memcpy(wgpuBufferGetMappedRange(vertex_buffer, 0, sizeof(vertices)), vertices, sizeof(vertices));
-    memcpy(wgpuBufferGetMappedRange(index_buffer, 0, sizeof(indices)), indices, sizeof(indices));
-
-    wgpuBufferUnmap(vertex_buffer);
-    wgpuBufferUnmap(index_buffer);
+    // wgpuBindGroupLayoutRelease(bind_group_layout);
+    // wgpuPipelineLayoutRelease(pipeline_layout);
 
     return result_success;
 }
 
 static void term_wgpu_core(void) {
     wgpuDevicePoll(device, true, NULL);
+    wgpuBindGroupRelease(bind_group);
     wgpuBufferRelease(vertex_buffer);
     wgpuBufferRelease(index_buffer);
+    wgpuBufferRelease(uniform_buffer);
     wgpuRenderPipelineRelease(pipeline);
     wgpuQueueRelease(queue);
     wgpuDeviceRelease(device);
@@ -328,6 +387,9 @@ static void term_glfw_core(void) {
 static result_t game_loop(void) {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        uniform.time += 0.01f;
+        wgpuQueueWriteBuffer(queue, uniform_buffer, 0, &uniform, sizeof(uniform));
 
         WGPUSurfaceTexture texture;
         wgpuSurfaceGetCurrentTexture(surface, &texture);
@@ -377,6 +439,8 @@ static result_t game_loop(void) {
         wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
         wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, sizeof(vertices));
         wgpuRenderPassEncoderSetIndexBuffer(render_pass_encoder, index_buffer, WGPUIndexFormat_Uint16, 0, sizeof(indices));
+
+        wgpuRenderPassEncoderSetBindGroup(render_pass_encoder, 0, bind_group, 0, NULL);
 
         wgpuRenderPassEncoderDrawIndexed(render_pass_encoder, sizeof(indices) / sizeof(*indices), 1, 0, 0, 0);
 

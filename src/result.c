@@ -14,6 +14,9 @@ static const char* get_result_string(result_t result) {
         case result_surface_texture_view_create_failure: return "Failed to create surface texture view";
         case result_shader_module_create_failure: return "Failed to create shader module";
         case result_buffer_create_failure: return "Failed to create buffer";
+        case result_bind_group_layout_create_failure: return "Failed to create bind group layout";
+        case result_pipeline_layout_create_failure: return "Failed to create pipeline layout";
+        case result_bind_group_create_failure: return "Failed to create bind group";
 
         case result_adapter_request_failure: return "Failed to request adapter";
         case result_device_request_failure: return "Failed to request device";
