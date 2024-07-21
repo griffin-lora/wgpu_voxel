@@ -114,6 +114,53 @@ static result_t create_shader_module(const char* path, WGPUShaderModule* shader_
     return result_success;
 }
 
+static WGPURequiredLimits get_required_limits(const WGPUSupportedLimits* limits) {
+    return (WGPURequiredLimits) {
+        .limits = {
+            .maxTextureDimension1D = WGPU_LIMIT_U32_UNDEFINED,
+            .maxTextureDimension2D = WGPU_LIMIT_U32_UNDEFINED,
+            .maxTextureDimension3D = WGPU_LIMIT_U32_UNDEFINED,
+            .maxTextureArrayLayers = WGPU_LIMIT_U32_UNDEFINED,
+            .maxBindGroups = WGPU_LIMIT_U32_UNDEFINED,
+            .maxBindGroupsPlusVertexBuffers = WGPU_LIMIT_U32_UNDEFINED,
+            .maxBindingsPerBindGroup = WGPU_LIMIT_U32_UNDEFINED,
+            .maxDynamicUniformBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED,
+            .maxDynamicStorageBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED,
+            .maxSampledTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED,
+            .maxSamplersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED,
+            .maxStorageBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED,
+            .maxStorageTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED,
+            .maxUniformBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED,
+            .maxUniformBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED,
+            .maxStorageBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED,
+            .minUniformBufferOffsetAlignment = limits->limits.minUniformBufferOffsetAlignment,
+            .minStorageBufferOffsetAlignment = limits->limits.minStorageBufferOffsetAlignment,
+            .maxVertexBuffers = WGPU_LIMIT_U32_UNDEFINED,
+            .maxBufferSize = WGPU_LIMIT_U64_UNDEFINED,
+            .maxVertexAttributes = WGPU_LIMIT_U32_UNDEFINED,
+            .maxVertexBufferArrayStride = WGPU_LIMIT_U32_UNDEFINED,
+            .maxInterStageShaderComponents = WGPU_LIMIT_U32_UNDEFINED,
+            .maxInterStageShaderVariables = WGPU_LIMIT_U32_UNDEFINED,
+            .maxColorAttachments = WGPU_LIMIT_U32_UNDEFINED,
+            .maxColorAttachmentBytesPerSample = WGPU_LIMIT_U32_UNDEFINED,
+            .maxComputeWorkgroupStorageSize = WGPU_LIMIT_U32_UNDEFINED,
+            .maxComputeInvocationsPerWorkgroup = WGPU_LIMIT_U32_UNDEFINED,
+            .maxComputeWorkgroupSizeX = WGPU_LIMIT_U32_UNDEFINED,
+            .maxComputeWorkgroupSizeY = WGPU_LIMIT_U32_UNDEFINED,
+            .maxComputeWorkgroupSizeZ = WGPU_LIMIT_U32_UNDEFINED,
+            .maxComputeWorkgroupsPerDimension = WGPU_LIMIT_U32_UNDEFINED,
+
+            .maxVertexAttributes = 2,
+            .maxVertexBuffers = 1,
+            .maxBufferSize = sizeof(vertices),
+            .maxVertexBufferArrayStride = sizeof(vertex_t),
+            .maxBindGroups = 1,
+            .maxUniformBuffersPerShaderStage = 1,
+            .maxUniformBufferBindingSize = 16 * 4
+        }
+    };
+}
+
 static result_t init_wgpu_core(void) {
     result_t result;
 
@@ -133,18 +180,21 @@ static result_t init_wgpu_core(void) {
         return result_adapter_request_failure;
     }
 
-    WGPUAdapterProperties adapter_properties = {
-    };
+    WGPUAdapterProperties adapter_properties = {};
     wgpuAdapterGetProperties(adapter, &adapter_properties);
     if (adapter_properties.name) {
         printf("Adapter name: %s\n", adapter_properties.name);
     }
 
+    WGPUSupportedLimits supported_limits = {};
+    wgpuAdapterGetLimits(adapter, &supported_limits);
+
+    WGPURequiredLimits required_limits = get_required_limits(&supported_limits);
+
     wgpuAdapterRequestDevice(adapter, &(WGPUDeviceDescriptor) {
         .requiredFeatureCount = 0,
-        .requiredLimits = NULL, // TODO: Like actually implement this
-        .defaultQueue = {
-        },
+        .requiredLimits = &required_limits,
+        .defaultQueue = {},
         .deviceLostCallback = device_lost_callback
     }, request_device, NULL);
     if (device == NULL) {
