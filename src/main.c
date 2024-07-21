@@ -402,8 +402,7 @@ static result_t init_wgpu_core(void) {
             .mask = ~0u,
             .alphaToCoverageEnabled = false
         },
-        .depthStencil = NULL,
-        .layout = NULL
+        .depthStencil = NULL
     })) == NULL) {
         return result_render_pipeline_create_failure;
     }
