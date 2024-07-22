@@ -29,6 +29,8 @@ static WGPUBuffer index_buffer;
 static WGPUBuffer uniform_buffer;
 static WGPUBindGroup bind_group;
 static WGPUSupportedLimits device_limits;
+static WGPUTexture depth_texture;
+static WGPUTextureView depth_texture_view;
 
 typedef struct {
     vec2s position;
@@ -120,7 +122,7 @@ static result_t create_shader_module(const char* path, WGPUShaderModule* shader_
     return result_success;
 }
 
-static WGPURequiredLimits get_required_limits(const WGPUSupportedLimits* limits) {
+static WGPURequiredLimits get_required_limits(const WGPUSupportedLimits* limits, uint32_t surface_width, uint32_t surface_height) {
     return (WGPURequiredLimits) {
         .limits = {
             .maxTextureDimension1D = WGPU_LIMIT_U32_UNDEFINED,
@@ -163,7 +165,9 @@ static WGPURequiredLimits get_required_limits(const WGPUSupportedLimits* limits)
             .maxBindGroups = 1,
             .maxUniformBuffersPerShaderStage = 1,
             .maxUniformBufferBindingSize = 16 * 4,
-            .maxDynamicUniformBuffersPerPipelineLayout = 1
+            .maxDynamicUniformBuffersPerPipelineLayout = 1,
+            .maxTextureDimension1D = surface_width,
+            .maxTextureDimension2D = surface_height
         }
     };
 }
@@ -203,7 +207,17 @@ static result_t init_wgpu_core(void) {
         return result_adapter_limits_get_failure;
     }
 
-    WGPURequiredLimits required_limits = get_required_limits(&adapter_supported_limits);
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+
+    float x_scale;
+    float y_scale;
+
+    glfwGetMonitorContentScale(monitor, &x_scale, &y_scale);
+
+    uint32_t surface_width = WINDOW_WIDTH * (uint32_t) x_scale;
+    uint32_t surface_height = WINDOW_HEIGHT * (uint32_t) y_scale;
+
+    WGPURequiredLimits required_limits = get_required_limits(&adapter_supported_limits, surface_width, surface_height);
 
     wgpuAdapterRequestDevice(adapter, &(WGPUDeviceDescriptor) {
         .requiredFeatureCount = 0,
@@ -232,16 +246,9 @@ static result_t init_wgpu_core(void) {
 
     WGPUTextureFormat surface_format = surface_capabilities.formats[0];
 
-    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-
-    float x_scale;
-    float y_scale;
-
-    glfwGetMonitorContentScale(monitor, &x_scale, &y_scale);
-
     wgpuSurfaceConfigure(surface, &(WGPUSurfaceConfiguration) {
-        .width = WINDOW_WIDTH * (uint32_t) x_scale,
-        .height = WINDOW_HEIGHT * (uint32_t) y_scale,
+        .width = surface_width,
+        .height = surface_height,
         .format = surface_format,
         .viewFormatCount = 0,
         .viewFormats = NULL,
@@ -361,7 +368,6 @@ static result_t init_wgpu_core(void) {
     }
 
     if ((pipeline = wgpuDeviceCreateRenderPipeline(device, &(WGPURenderPipelineDescriptor) {
-        .layout = pipeline_layout,
         .vertex = {
             .bufferCount = 1,
             .buffers = &(WGPUVertexBufferLayout) {
@@ -420,7 +426,24 @@ static result_t init_wgpu_core(void) {
             .mask = ~0u,
             .alphaToCoverageEnabled = false
         },
-        .depthStencil = NULL
+        .layout = pipeline_layout,
+        .depthStencil = &(WGPUDepthStencilState) {
+            .depthCompare = WGPUCompareFunction_Less,
+            .depthWriteEnabled = true,
+            .format = WGPUTextureFormat_Depth24Plus,
+            .stencilFront = {
+                .compare = WGPUCompareFunction_Always,
+                .failOp = WGPUStencilOperation_Keep,
+                .depthFailOp = WGPUStencilOperation_Keep,
+                .passOp = WGPUStencilOperation_Keep
+            },
+            .stencilBack = {
+                .compare = WGPUCompareFunction_Always,
+                .failOp = WGPUStencilOperation_Keep,
+                .depthFailOp = WGPUStencilOperation_Keep,
+                .passOp = WGPUStencilOperation_Keep
+            }
+        }
     })) == NULL) {
         return result_render_pipeline_create_failure;
     }
@@ -431,11 +454,38 @@ static result_t init_wgpu_core(void) {
     wgpuBindGroupLayoutRelease(bind_group_layout);
     wgpuPipelineLayoutRelease(pipeline_layout);
 
+    if ((depth_texture = wgpuDeviceCreateTexture(device, &(WGPUTextureDescriptor) {
+        .dimension = WGPUTextureDimension_2D,
+        .format = WGPUTextureFormat_Depth24Plus,
+        .mipLevelCount = 1,
+        .sampleCount = 1,
+        .size = { surface_width, surface_height, 1 },
+        .usage = WGPUTextureUsage_RenderAttachment,
+        .viewFormatCount = 1,
+        .viewFormats = (WGPUTextureFormat[1]) { WGPUTextureFormat_Depth24Plus }
+    })) == NULL) {
+        return result_texture_create_failure;
+    }
+
+    if ((depth_texture_view = wgpuTextureCreateView(depth_texture, &(WGPUTextureViewDescriptor) {
+        .aspect = WGPUTextureAspect_DepthOnly,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .dimension = WGPUTextureViewDimension_2D,
+        .format = WGPUTextureFormat_Depth24Plus
+    })) == NULL) {
+        return result_texture_view_create_failure;
+    }
+
     return result_success;
 }
 
 static void term_wgpu_core(void) {
     wgpuDeviceTick(device);
+    wgpuTextureViewRelease(depth_texture_view);
+    wgpuTextureRelease(depth_texture);
     wgpuBindGroupRelease(bind_group);
     wgpuBufferRelease(vertex_buffer);
     wgpuBufferRelease(index_buffer);
@@ -523,7 +573,16 @@ static result_t game_loop(void) {
                 .clearValue = (WGPUColor) { 0.9, 0.1, 0.2, 1.0 },
                 .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
             },
-            .depthStencilAttachment = NULL,
+            .depthStencilAttachment = &(WGPURenderPassDepthStencilAttachment) {
+                .view = depth_texture_view,
+                .depthClearValue = 1.0f,
+                .depthLoadOp = WGPULoadOp_Clear,
+                .depthStoreOp = WGPUStoreOp_Store,
+                .stencilClearValue = 0,
+                .stencilLoadOp = WGPULoadOp_Undefined,
+                .stencilStoreOp = WGPUStoreOp_Undefined,
+                .stencilReadOnly = true
+            },
             .timestampWrites = NULL // TODO: Implement later
         });
 
