@@ -13,6 +13,7 @@
 #include <GLFW/glfw3.h>
 #include <glfw3webgpu.h>
 #include <cglm/struct/vec2.h>
+#include <stb/stb_image.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -31,6 +32,9 @@ static WGPUBindGroup bind_group;
 static WGPUSupportedLimits device_limits;
 static WGPUTexture depth_texture;
 static WGPUTextureView depth_texture_view;
+static WGPUSampler sampler;
+static WGPUTexture texture;
+static WGPUTextureView texture_view;
 
 typedef struct {
     vec2s position;
@@ -167,7 +171,8 @@ static WGPURequiredLimits get_required_limits(const WGPUSupportedLimits* limits,
             .maxUniformBufferBindingSize = 16 * 4,
             .maxDynamicUniformBuffersPerPipelineLayout = 1,
             .maxTextureDimension1D = surface_width,
-            .maxTextureDimension2D = surface_height
+            .maxTextureDimension2D = surface_height,
+            .maxSamplersPerShaderStage = 1
         }
     };
 }
@@ -328,15 +333,31 @@ static result_t init_wgpu_core(void) {
     }
 
     WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &(WGPUBindGroupLayoutDescriptor) {
-        .label = "Bind group layout",
-        .entryCount = 1,
-        .entries = &(WGPUBindGroupLayoutEntry) {
-            .binding = 0,
-            .visibility = WGPUShaderStage_Vertex,
-            .buffer = {
-                .type = WGPUBufferBindingType_Uniform,
-                .minBindingSize = sizeof(*uniforms),
-                .hasDynamicOffset = true
+        .entryCount = 3,
+        .entries = (WGPUBindGroupLayoutEntry[3]) {
+            {
+                .binding = 0,
+                .visibility = WGPUShaderStage_Vertex,
+                .buffer = {
+                    .type = WGPUBufferBindingType_Uniform,
+                    .minBindingSize = sizeof(*uniforms),
+                    .hasDynamicOffset = true
+                }
+            },
+            {
+                .binding = 1,
+                .visibility = WGPUShaderStage_Fragment,
+                .texture = {
+                    .sampleType = WGPUTextureSampleType_Float,
+                    .viewDimension = WGPUTextureViewDimension_2D
+                }
+            },
+            {
+                .binding = 2,
+                .visibility = WGPUShaderStage_Fragment,
+                .sampler = {
+                    .type = WGPUSamplerBindingType_Filtering
+                }
             }
         }
     });
@@ -352,19 +373,6 @@ static result_t init_wgpu_core(void) {
 
     if (pipeline_layout == NULL) {
         return result_pipeline_layout_create_failure;
-    }
-
-    if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
-        .layout = bind_group_layout,
-        .entryCount = 1,
-        .entries = &(WGPUBindGroupEntry) {
-            .binding = 0,
-            .buffer = uniform_buffer,
-            .offset = 0,
-            .size = sizeof(*uniforms)
-        }
-    })) == NULL) {
-        return result_bind_group_create_failure;
     }
 
     if ((pipeline = wgpuDeviceCreateRenderPipeline(device, &(WGPURenderPipelineDescriptor) {
@@ -479,12 +487,103 @@ static result_t init_wgpu_core(void) {
         return result_texture_view_create_failure;
     }
 
+    if ((sampler = wgpuDeviceCreateSampler(device, &(WGPUSamplerDescriptor) {
+        .addressModeU = WGPUAddressMode_ClampToEdge,
+        .addressModeV = WGPUAddressMode_ClampToEdge,
+        .addressModeW = WGPUAddressMode_ClampToEdge,
+        .magFilter = WGPUFilterMode_Linear,
+        .minFilter = WGPUFilterMode_Linear,
+        .mipmapFilter = WGPUMipmapFilterMode_Linear,
+        .lodMinClamp = 0.0f,
+        .lodMaxClamp = 1.0f,
+        .compare = WGPUCompareFunction_Undefined,
+        .maxAnisotropy = 1
+    })) == NULL) {
+        return result_sampler_create_failure;
+    }
+
+    if ((texture = wgpuDeviceCreateTexture(device, &(WGPUTextureDescriptor) {
+        .dimension = WGPUTextureDimension_2D,
+        .format = WGPUTextureFormat_RGBA8Unorm,
+        .mipLevelCount = 1,
+        .sampleCount = 1,
+        .size = { 256, 256, 1 },
+        .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
+        .viewFormatCount = 0,
+        .viewFormats = NULL
+    })) == NULL) {
+        return result_texture_create_failure;
+    }
+
+    if ((texture_view = wgpuTextureCreateView(texture, &(WGPUTextureViewDescriptor) {
+        .aspect = WGPUTextureAspect_All,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .dimension = WGPUTextureViewDimension_2D,
+        .format = WGPUTextureFormat_RGBA8Unorm
+    })) == NULL) {
+        return result_texture_view_create_failure;
+    }
+
+    int dummy;
+
+    const void* texture_pixels = stbi_load("texture/test.png", &dummy, &dummy, (int[1]) { 0 }, STBI_rgb_alpha);
+
+    if (texture_pixels == NULL) {
+        return result_file_read_failure; // TODO: Use a different error
+    }
+
+    wgpuQueueWriteTexture(queue, &(WGPUImageCopyTexture) {
+        .texture = texture,
+        .mipLevel = 0,
+        .origin = { 0, 0, 0 },
+        .aspect = WGPUTextureAspect_All
+    }, texture_pixels, 256 * 256 * 4, &(WGPUTextureDataLayout) {
+        .offset = 0,
+        .bytesPerRow = 4 * 256,
+        .rowsPerImage = 256
+    }, &(WGPUExtent3D) {
+        .width = 256,
+        .height = 256,
+        .depthOrArrayLayers = 1
+    });
+
+    stbi_image_free((void*) texture_pixels);
+
+    if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
+        .layout = bind_group_layout,
+        .entryCount = 3,
+        .entries = (WGPUBindGroupEntry[3]) {
+            {
+                .binding = 0,
+                .buffer = uniform_buffer,
+                .offset = 0,
+                .size = sizeof(*uniforms)
+            },
+            {
+                .binding = 1,
+                .textureView = texture_view
+            },
+            {
+                .binding = 2,
+                .sampler = sampler
+            }
+        }
+    })) == NULL) {
+        return result_bind_group_create_failure;
+    }
+
     return result_success;
 }
 
 static void term_wgpu_core(void) {
     wgpuDeviceTick(device);
+    wgpuTextureViewRelease(texture_view);
+    wgpuTextureRelease(texture);
     wgpuTextureViewRelease(depth_texture_view);
+    wgpuSamplerRelease(sampler);
     wgpuTextureRelease(depth_texture);
     wgpuBindGroupRelease(bind_group);
     wgpuBufferRelease(vertex_buffer);

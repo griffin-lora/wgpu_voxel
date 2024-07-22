@@ -17,6 +17,7 @@ static const char* get_result_string(result_t result) {
         case result_bind_group_layout_create_failure: return "Failed to create bind group layout";
         case result_pipeline_layout_create_failure: return "Failed to create pipeline layout";
         case result_bind_group_create_failure: return "Failed to create bind group";
+        case result_sampler_create_failure: return "Failed to create sampler";
         case result_texture_create_failure: return "Failed to create texture";
         case result_texture_view_create_failure: return "Failed to create texture view";
 
