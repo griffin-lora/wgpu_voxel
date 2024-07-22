@@ -38,7 +38,7 @@ static WGPUTextureView texture_view;
 
 typedef struct {
     vec2s position;
-    vec2s tex_coord;
+    vec2s texel_coord;
 } vertex_t;
 
 static vertex_t vertices[4];
