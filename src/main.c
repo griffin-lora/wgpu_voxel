@@ -38,7 +38,7 @@ static WGPUTextureView texture_view;
 
 typedef struct {
     vec2s position;
-    vec3s color;
+    vec2s tex_coord;
 } vertex_t;
 
 static vertex_t vertices[4];
@@ -276,19 +276,19 @@ static result_t init_wgpu_core(void) {
 
     vertices[0] = (vertex_t) {
         (vec2s) {{ -0.5f, -0.5f }},
-        (vec3s) {{ 0.0f, 1.0f, 1.0f }},
+        (vec2s) {{ 0.0f, 1.0f }}
     };
     vertices[1] = (vertex_t) {
         (vec2s) {{ 0.5f, -0.5f }},
-        (vec3s) {{ 0.0f, 0.0f, 1.0f }}
+        (vec2s) {{ 1.0f, 1.0f }}
     };
     vertices[2] = (vertex_t) {
         (vec2s) {{ 0.5f, 0.5f }},
-        (vec3s) {{ 0.0f, 1.0f, 1.0f }}
+        (vec2s) {{ 1.0f, 0.0f }}
     };
     vertices[3] = (vertex_t) {
         (vec2s) {{ -0.5f, 0.5f }},
-        (vec3s) {{ 0.0f, 1.0f, 0.0f }},
+        (vec2s) {{ 0.0f, 0.0f }}
     };
 
     vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
@@ -387,7 +387,7 @@ static result_t init_wgpu_core(void) {
                         .shaderLocation = 0
                     },
                     {
-                        .format = WGPUVertexFormat_Float32x3,
+                        .format = WGPUVertexFormat_Float32x2,
                         .offset = sizeof(vertices->position),
                         .shaderLocation = 1
                     }
