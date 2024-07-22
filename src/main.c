@@ -1,5 +1,7 @@
 #include "result.h"
 #include <GLFW/glfw3native.h>
+#include <cglm/types-struct.h>
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
@@ -26,6 +28,7 @@ static WGPUBuffer vertex_buffer;
 static WGPUBuffer index_buffer;
 static WGPUBuffer uniform_buffer;
 static WGPUBindGroup bind_group;
+static WGPUSupportedLimits device_limits;
 
 typedef struct {
     vec2s position;
@@ -39,10 +42,10 @@ static uint16_t indices[6] = {
 };
 
 typedef struct {
-    float time;
+    vec2s offset;
 } uniform_t;
 
-static uniform_t uniform;
+static uniform_t uniforms[2];
 
 #define MAKE_REQUEST_CALLBACK(TYPE, VAR) \
 static void request_##VAR(WGPURequest##TYPE##Status, WGPU##TYPE local_##VAR, char const*, void*) { \
@@ -159,9 +162,15 @@ static WGPURequiredLimits get_required_limits(const WGPUSupportedLimits* limits)
             .maxVertexBufferArrayStride = sizeof(vertex_t),
             .maxBindGroups = 1,
             .maxUniformBuffersPerShaderStage = 1,
-            .maxUniformBufferBindingSize = 16 * 4
+            .maxUniformBufferBindingSize = 16 * 4,
+            .maxDynamicUniformBuffersPerPipelineLayout = 1
         }
     };
+}
+
+static uint32_t ceil_to_next_multiple(uint32_t value, uint32_t step) {
+    uint32_t divide_and_ceil = value / step + (value % step == 0 ? 0 : 1);
+    return step * divide_and_ceil;
 }
 
 static result_t init_wgpu_core(void) {
@@ -189,12 +198,12 @@ static result_t init_wgpu_core(void) {
         printf("Adapter name: %s\n", adapter_info.device);
     }
 
-    WGPUSupportedLimits supported_limits = {};
-    if (wgpuAdapterGetLimits(adapter, &supported_limits) != WGPUStatus_Success) {
+    WGPUSupportedLimits adapter_supported_limits = {};
+    if (wgpuAdapterGetLimits(adapter, &adapter_supported_limits) != WGPUStatus_Success) {
         return result_adapter_limits_get_failure;
     }
 
-    WGPURequiredLimits required_limits = get_required_limits(&supported_limits);
+    WGPURequiredLimits required_limits = get_required_limits(&adapter_supported_limits);
 
     wgpuAdapterRequestDevice(adapter, &(WGPUDeviceDescriptor) {
         .requiredFeatureCount = 0,
@@ -210,6 +219,10 @@ static result_t init_wgpu_core(void) {
     }, request_device, NULL);
     if (device == NULL) {
         return result_device_request_failure;
+    }
+
+    if (wgpuDeviceGetLimits(device, &device_limits) != WGPUStatus_Success) {
+        return result_device_limits_get_failure;
     }
 
     WGPUSurfaceCapabilities surface_capabilities;
@@ -278,9 +291,13 @@ static result_t init_wgpu_core(void) {
         .mappedAtCreation = true
     });
 
+    uint32_t uniform_stride = ceil_to_next_multiple(sizeof(*uniforms), device_limits.limits.minUniformBufferOffsetAlignment);
+
+    uint32_t uniforms_num_bytes = (sizeof(uniforms) / sizeof(*uniforms)) * uniform_stride;
+
     uniform_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-        .size = sizeof(uniform),
+        .size = uniforms_num_bytes,
         .mappedAtCreation = false
     });
     
@@ -311,7 +328,8 @@ static result_t init_wgpu_core(void) {
             .visibility = WGPUShaderStage_Vertex,
             .buffer = {
                 .type = WGPUBufferBindingType_Uniform,
-                .minBindingSize = sizeof(uniform_t)
+                .minBindingSize = sizeof(*uniforms),
+                .hasDynamicOffset = true
             }
         }
     });
@@ -336,7 +354,7 @@ static result_t init_wgpu_core(void) {
             .binding = 0,
             .buffer = uniform_buffer,
             .offset = 0,
-            .size = sizeof(uniform_t)
+            .size = sizeof(*uniforms)
         }
     })) == NULL) {
         return result_bind_group_create_failure;
@@ -451,11 +469,21 @@ static void term_glfw_core(void) {
 }
 
 static result_t game_loop(void) {
+    float time = 0.0f;
+
+    uint32_t uniform_stride = ceil_to_next_multiple(sizeof(*uniforms), device_limits.limits.minUniformBufferOffsetAlignment);
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
-        uniform.time += 0.01f;
-        wgpuQueueWriteBuffer(queue, uniform_buffer, 0, &uniform, sizeof(uniform));
+        time += 0.01f;
+
+        uniforms[0].offset = (vec2s) {{ 0.3f * cosf(time) - 0.5f, 0.3f * sinf(time) }};
+        uniforms[1].offset = (vec2s) {{ 0.3f * cosf(time) + 0.5f, 0.3f * sinf(time) }};
+
+        for (size_t i = 0; i < 2; i++) {
+            wgpuQueueWriteBuffer(queue, uniform_buffer, uniform_stride * i, &uniforms[i], sizeof(uniforms[i]));
+        }
 
         WGPUSurfaceTexture texture;
         wgpuSurfaceGetCurrentTexture(surface, &texture);
@@ -507,9 +535,10 @@ static result_t game_loop(void) {
         wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, sizeof(vertices));
         wgpuRenderPassEncoderSetIndexBuffer(render_pass_encoder, index_buffer, WGPUIndexFormat_Uint16, 0, sizeof(indices));
 
-        wgpuRenderPassEncoderSetBindGroup(render_pass_encoder, 0, bind_group, 0, NULL);
-
-        wgpuRenderPassEncoderDrawIndexed(render_pass_encoder, sizeof(indices) / sizeof(*indices), 1, 0, 0, 0);
+        for (size_t i = 0; i < 2; i++) {
+            wgpuRenderPassEncoderSetBindGroup(render_pass_encoder, 0, bind_group, 1, (uint32_t[1]) { uniform_stride * (uint32_t) i });
+            wgpuRenderPassEncoderDrawIndexed(render_pass_encoder, sizeof(indices) / sizeof(*indices), 1, 0, 0, 0);
+        }
 
         wgpuRenderPassEncoderEnd(render_pass_encoder);
         wgpuRenderPassEncoderRelease(render_pass_encoder);

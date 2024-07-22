@@ -24,6 +24,7 @@ typedef enum {
     result_queue_get_failure,
     result_surface_texture_get_failure,
     result_adapter_limits_get_failure,
+    result_device_limits_get_failure,
 
     result_command_encoder_finish_failure,
 
