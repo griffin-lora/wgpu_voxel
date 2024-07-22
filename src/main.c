@@ -507,7 +507,7 @@ static result_t init_wgpu_core(void) {
         .format = WGPUTextureFormat_RGBA8Unorm,
         .mipLevelCount = 1,
         .sampleCount = 1,
-        .size = { 256, 256, 1 },
+        .size = { 2048, 2048, 1 },
         .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
         .viewFormatCount = 0,
         .viewFormats = NULL
@@ -529,7 +529,7 @@ static result_t init_wgpu_core(void) {
 
     int dummy;
 
-    const void* texture_pixels = stbi_load("texture/test.png", &dummy, &dummy, (int[1]) { 0 }, STBI_rgb_alpha);
+    const void* texture_pixels = stbi_load("texture/test.jpg", &dummy, &dummy, (int[1]) { 0 }, STBI_rgb_alpha);
 
     if (texture_pixels == NULL) {
         return result_file_read_failure; // TODO: Use a different error
@@ -540,13 +540,13 @@ static result_t init_wgpu_core(void) {
         .mipLevel = 0,
         .origin = { 0, 0, 0 },
         .aspect = WGPUTextureAspect_All
-    }, texture_pixels, 256 * 256 * 4, &(WGPUTextureDataLayout) {
+    }, texture_pixels, 2048 * 2048 * 4, &(WGPUTextureDataLayout) {
         .offset = 0,
-        .bytesPerRow = 4 * 256,
-        .rowsPerImage = 256
+        .bytesPerRow = 4 * 2048,
+        .rowsPerImage = 2048
     }, &(WGPUExtent3D) {
-        .width = 256,
-        .height = 256,
+        .width = 2048,
+        .height = 2048,
         .depthOrArrayLayers = 1
     });
 
