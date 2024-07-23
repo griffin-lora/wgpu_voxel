@@ -8,39 +8,27 @@
 
 static WGPUComputePipeline pipeline;
 static WGPUBindGroup bind_group;
-static WGPUBuffer in_voxel_buffer;
-static WGPUBuffer out_voxel_buffer;
-
-typedef struct {
-    float x;
-} voxel_t;
-
-voxel_t in_voxels[64];
-voxel_t out_voxels[64];
+static WGPUTexture voxel_texture;
+static WGPUTextureView voxel_texture_view;
 
 result_t init_compute_pipeline(void) {
     result_t result;
 
     WGPUShaderModule shader_module;
-    if ((result = create_shader_module("shader/compute.spv", &shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/voxel_generator.spv", &shader_module)) != result_success) {
         return result;
     }
 
     WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &(WGPUBindGroupLayoutDescriptor) {
-        .entryCount = 2,
-        .entries = (WGPUBindGroupLayoutEntry[2]) {
+        .entryCount = 1,
+        .entries = (WGPUBindGroupLayoutEntry[1]) {
             {
                 .binding = 0,
                 .visibility = WGPUShaderStage_Compute,
-                .buffer = {
-                    .type = WGPUBufferBindingType_ReadOnlyStorage
-                }
-            },
-            {
-                .binding = 1,
-                .visibility = WGPUShaderStage_Compute,
-                .buffer = {
-                    .type = WGPUBufferBindingType_Storage
+                .storageTexture = {
+                    .access = WGPUStorageTextureAccess_WriteOnly,
+                    .format = WGPUTextureFormat_R32Uint,
+                    .viewDimension = WGPUTextureViewDimension_3D
                 }
             }
         }
@@ -70,44 +58,38 @@ result_t init_compute_pipeline(void) {
     wgpuBindGroupLayoutRelease(bind_group_layout);
     wgpuPipelineLayoutRelease(pipeline_layout);
 
-    for (size_t i = 0; i < 64; i++) {
-        in_voxels[i].x = (float) i;
-    }
-
-    if ((in_voxel_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .size = sizeof(in_voxels),
-        .usage = WGPUBufferUsage_Storage,
-        .mappedAtCreation = true
+    if ((voxel_texture = wgpuDeviceCreateTexture(device, &(WGPUTextureDescriptor) {
+        .dimension = WGPUTextureDimension_3D,
+        .format = WGPUTextureFormat_R32Uint,
+        .mipLevelCount = 1,
+        .sampleCount = 1,
+        .size = { 32, 32, 32 },
+        .usage = WGPUTextureUsage_StorageBinding,
+        .viewFormatCount = 0,
+        .viewFormats = NULL
     })) == NULL) {
-        return result_buffer_create_failure;
+        return result_texture_create_failure;
     }
 
-    if ((out_voxel_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .size = sizeof(out_voxels),
-        .usage = WGPUBufferUsage_Storage
+    if ((voxel_texture_view = wgpuTextureCreateView(voxel_texture, &(WGPUTextureViewDescriptor) {
+        .aspect = WGPUTextureAspect_All,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .dimension = WGPUTextureViewDimension_3D,
+        .format = WGPUTextureFormat_R32Uint
     })) == NULL) {
-        return result_buffer_create_failure;
+        return result_texture_view_create_failure;
     }
-
-    memcpy(wgpuBufferGetMappedRange(in_voxel_buffer, 0, sizeof(in_voxels)), in_voxels, sizeof(in_voxels));
-
-    wgpuBufferUnmap(in_voxel_buffer);
 
     if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
         .layout = bind_group_layout,
-        .entryCount = 2,
-        .entries = (WGPUBindGroupEntry[2]) {
+        .entryCount = 1,
+        .entries = (WGPUBindGroupEntry[1]) {
             {
                 .binding = 0,
-                .buffer = in_voxel_buffer,
-                .offset = 0,
-                .size = sizeof(in_voxels)
-            },
-            {
-                .binding = 1,
-                .buffer = out_voxel_buffer,
-                .offset = 0,
-                .size = sizeof(out_voxels)
+                .textureView = voxel_texture_view
             }
         }
     })) == NULL) {
@@ -130,7 +112,7 @@ result_t run_compute_pipeline(void) {
 
     wgpuComputePassEncoderSetPipeline(compute_pass_encoder, pipeline);
     wgpuComputePassEncoderSetBindGroup(compute_pass_encoder, 0, bind_group, 0, NULL);
-    wgpuComputePassEncoderDispatchWorkgroups(compute_pass_encoder, 1, 1, 1);
+    wgpuComputePassEncoderDispatchWorkgroups(compute_pass_encoder, 8, 8, 8);
 
     wgpuComputePassEncoderEnd(compute_pass_encoder);
     wgpuComputePassEncoderRelease(compute_pass_encoder);
@@ -151,6 +133,6 @@ result_t run_compute_pipeline(void) {
 void term_compute_pipeline(void) {
     wgpuComputePipelineRelease(pipeline);
     wgpuBindGroupRelease(bind_group);
-    wgpuBufferRelease(in_voxel_buffer);
-    wgpuBufferRelease(out_voxel_buffer);
+    wgpuTextureViewRelease(voxel_texture_view);
+    wgpuTextureRelease(voxel_texture);
 }
