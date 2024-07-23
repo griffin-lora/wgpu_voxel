@@ -1,6 +1,6 @@
 #include "gfx/gfx.h"
 #include "result.h"
-
+#include <GLFW/glfw3.h>
 
 int main() {
     result_t result;
@@ -9,7 +9,7 @@ int main() {
         return 1;
     }
 
-    while (!should_window_close()) {
+    while (!glfwWindowShouldClose(window)) {
         if ((result = draw_gfx()) != result_success) {
             print_result_error(result);
             return 1;
