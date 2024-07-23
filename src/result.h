@@ -7,6 +7,7 @@ typedef enum {
     result_window_create_failure,
     result_instance_create_failure,
     result_render_pipeline_create_failure,
+    result_compute_pipeline_create_failure,
     result_command_encoder_create_failure,
     result_render_pass_encoder_create_failure,
     result_compute_pass_encoder_create_failure,

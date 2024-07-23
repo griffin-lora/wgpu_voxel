@@ -1,0 +1,19 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+struct voxel_t {
+    float x;
+};
+
+layout(set = 0, binding = 0) readonly buffer in_t {
+    voxel_t in_voxels[64];
+};
+
+layout(set = 0, binding = 1) buffer out_t {
+    voxel_t out_voxels[64];
+};
+
+void main() {
+    out_voxels[gl_LocalInvocationIndex].x = in_voxels[gl_LocalInvocationIndex].x * 2.0;
+}

@@ -9,6 +9,7 @@ static const char* get_result_string(result_t result) {
         case result_window_create_failure: return "Failed to create window";
         case result_instance_create_failure: return "Failed to create instance";
         case result_render_pipeline_create_failure: return "Failed to create render pipeline";
+        case result_compute_pipeline_create_failure: return "Failed to create compute pipeline";
         case result_command_encoder_create_failure: return "Failed to create command encoder";
         case result_render_pass_encoder_create_failure: return "Failed to render pass encoder";
         case result_compute_pass_encoder_create_failure: return "Failed to compute pass encoder";

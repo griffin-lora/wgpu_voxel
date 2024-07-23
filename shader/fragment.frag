@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 layout(binding = 1) uniform texture2D tex;
 layout(binding = 2) uniform sampler tex_sampler;

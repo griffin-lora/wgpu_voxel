@@ -99,7 +99,8 @@ static WGPURequiredLimits get_required_limits(const WGPUSupportedLimits* limits,
             .maxDynamicUniformBuffersPerPipelineLayout = 1,
             .maxTextureDimension1D = surface_width,
             .maxTextureDimension2D = surface_height,
-            .maxSamplersPerShaderStage = 1
+            .maxSamplersPerShaderStage = 1,
+            .maxStorageBuffersPerShaderStage = 2
         }
     };
 }
@@ -228,7 +229,11 @@ static result_t init_wgpu_core(void) {
     if ((result = init_compute_pipeline()) != result_success) {
         return result;
     }
-    
+
+    if ((result = run_compute_pipeline()) != result_success) {
+        return result;
+    }
+
     return result_success;
 }
 
