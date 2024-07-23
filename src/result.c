@@ -11,6 +11,7 @@ static const char* get_result_string(result_t result) {
         case result_render_pipeline_create_failure: return "Failed to create render pipeline";
         case result_command_encoder_create_failure: return "Failed to create command encoder";
         case result_render_pass_encoder_create_failure: return "Failed to render pass encoder";
+        case result_compute_pass_encoder_create_failure: return "Failed to compute pass encoder";
         case result_surface_texture_view_create_failure: return "Failed to create surface texture view";
         case result_shader_module_create_failure: return "Failed to create shader module";
         case result_buffer_create_failure: return "Failed to create buffer";

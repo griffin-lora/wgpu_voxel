@@ -9,6 +9,7 @@ typedef enum {
     result_render_pipeline_create_failure,
     result_command_encoder_create_failure,
     result_render_pass_encoder_create_failure,
+    result_compute_pass_encoder_create_failure,
     result_surface_texture_view_create_failure,
     result_shader_module_create_failure,
     result_buffer_create_failure,
@@ -35,7 +36,7 @@ typedef enum {
 
     result_file_access_failure,
     result_file_open_failure,
-    result_file_read_failure,
+    result_file_read_failure
 } result_t;
 
 void print_result_error(result_t result);

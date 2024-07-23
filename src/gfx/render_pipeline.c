@@ -1,5 +1,6 @@
 #include "render_pipeline.h"
 #include "gfx.h"
+#include "shader.h"
 #include "result.h"
 #include <cglm/types-struct.h>
 #include <dawn/webgpu.h>
@@ -7,8 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <stb/stb_image.h>
 
 static WGPURenderPipeline pipeline;
@@ -36,48 +35,6 @@ typedef struct {
 } uniform_t;
 
 static uniform_t uniforms[2];
-
-static result_t create_shader_module(const char* path, WGPUShaderModule* shader_module) {
-    if (access(path, F_OK) != 0) {
-        return result_file_access_failure;
-    }
-
-    FILE* file = fopen(path, "rb");
-    if (file == NULL) {
-        return result_file_open_failure;
-    }
-
-    struct stat st;
-    stat(path, &st);
-
-    size_t num_bytes = (size_t)st.st_size;
-
-    uint32_t* bytes = malloc(num_bytes);
-    memset(bytes, 0, num_bytes);
-    if (fread(bytes, num_bytes, 1, file) != 1) {
-        return result_file_read_failure;
-    }
-
-    fclose(file);
-
-    WGPUShaderModule module = wgpuDeviceCreateShaderModule(device, &(WGPUShaderModuleDescriptor) {
-        .nextInChain = (const WGPUChainedStruct*) (&(WGPUShaderModuleSPIRVDescriptor) {
-            .chain = {
-                .sType = WGPUSType_ShaderModuleSPIRVDescriptor
-            },
-            .codeSize = (uint32_t) num_bytes / sizeof(uint32_t),
-            .code = bytes
-        })
-    });
-
-    if (module == NULL) {
-        return result_shader_module_create_failure;
-    }
-
-    *shader_module = module;
-
-    return result_success;
-}
 
 static uint32_t ceil_to_next_multiple(uint32_t value, uint32_t step) {
     uint32_t divide_and_ceil = value / step + (value % step == 0 ? 0 : 1);

@@ -1,4 +1,5 @@
 #include "gfx.h"
+#include "gfx/compute_pipeline.h"
 #include "gfx/render_pipeline.h"
 #include "glfw3webgpu.h"
 #include "result.h"
@@ -104,6 +105,8 @@ static WGPURequiredLimits get_required_limits(const WGPUSupportedLimits* limits,
 }
 
 static result_t init_wgpu_core(void) {
+    result_t result;
+    
     if ((instance = wgpuCreateInstance(&(WGPUInstanceDescriptor) {
     })) == NULL) {
         return result_instance_create_failure;
@@ -218,12 +221,21 @@ static result_t init_wgpu_core(void) {
         return result_texture_view_create_failure;
     }
 
-    return init_render_pipeline();
+    if ((result = init_render_pipeline()) != result_success) {
+        return result;
+    }
+
+    if ((result = init_compute_pipeline()) != result_success) {
+        return result;
+    }
+    
+    return result_success;
 }
 
 static void term_wgpu_core(void) {
     wgpuDeviceTick(device);
     term_render_pipeline();
+    term_compute_pipeline();
 
     wgpuTextureViewRelease(depth_texture_view);
     wgpuTextureRelease(depth_texture);
