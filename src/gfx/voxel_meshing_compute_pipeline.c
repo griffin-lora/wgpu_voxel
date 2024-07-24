@@ -25,9 +25,8 @@ result_t init_voxel_meshing_compute_pipeline(void) {
             {
                 .binding = 0,
                 .visibility = WGPUShaderStage_Compute,
-                .storageTexture = {
-                    .access = WGPUStorageTextureAccess_WriteOnly,
-                    .format = WGPUTextureFormat_R32Uint,
+                .texture = {
+                    .sampleType = WGPUTextureSampleType_Uint,
                     .viewDimension = WGPUTextureViewDimension_3D
                 }
             },

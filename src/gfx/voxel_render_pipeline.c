@@ -6,6 +6,7 @@
 #include "result.h"
 #include <cglm/types-struct.h>
 #include <dawn/webgpu.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -188,7 +189,7 @@ result_t init_voxel_render_pipeline(void) {
         .addressModeU = WGPUAddressMode_ClampToEdge,
         .addressModeV = WGPUAddressMode_ClampToEdge,
         .addressModeW = WGPUAddressMode_ClampToEdge,
-        .magFilter = WGPUFilterMode_Linear,
+        .magFilter = WGPUFilterMode_Nearest,
         .minFilter = WGPUFilterMode_Linear,
         .mipmapFilter = WGPUMipmapFilterMode_Linear,
         .lodMinClamp = 0.0f,
@@ -199,12 +200,23 @@ result_t init_voxel_render_pipeline(void) {
         return result_sampler_create_failure;
     }
 
+    int32_t texture_width;
+    int32_t texture_height;
+
+    const void* texture_pixels = stbi_load("texture/cube_voxel_0.png", &texture_width, &texture_height, (int[1]) { 0 }, STBI_rgb_alpha);
+
+    if (texture_pixels == NULL || texture_width != texture_height || texture_width == 0 || (texture_width & (texture_width - 1)) != 0) {
+        return result_file_read_failure; // TODO: Use a different error
+    }
+    
+    uint32_t texture_size = (uint32_t) texture_width;
+
     if ((texture = wgpuDeviceCreateTexture(device, &(WGPUTextureDescriptor) {
         .dimension = WGPUTextureDimension_2D,
-        .format = WGPUTextureFormat_RGBA8Unorm,
+        .format = WGPUTextureFormat_RGBA8UnormSrgb,
         .mipLevelCount = 1,
         .sampleCount = 1,
-        .size = { 2048, 2048, 1 },
+        .size = { texture_size, texture_size, 1 },
         .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
         .viewFormatCount = 0,
         .viewFormats = NULL
@@ -219,17 +231,9 @@ result_t init_voxel_render_pipeline(void) {
         .baseMipLevel = 0,
         .mipLevelCount = 1,
         .dimension = WGPUTextureViewDimension_2D,
-        .format = WGPUTextureFormat_RGBA8Unorm
+        .format = WGPUTextureFormat_RGBA8UnormSrgb
     })) == NULL) {
         return result_texture_view_create_failure;
-    }
-
-    int dummy;
-
-    const void* texture_pixels = stbi_load("texture/test.jpg", &dummy, &dummy, (int[1]) { 0 }, STBI_rgb_alpha);
-
-    if (texture_pixels == NULL) {
-        return result_file_read_failure; // TODO: Use a different error
     }
 
     wgpuQueueWriteTexture(queue, &(WGPUImageCopyTexture) {
@@ -237,13 +241,13 @@ result_t init_voxel_render_pipeline(void) {
         .mipLevel = 0,
         .origin = { 0, 0, 0 },
         .aspect = WGPUTextureAspect_All
-    }, texture_pixels, 2048 * 2048 * 4, &(WGPUTextureDataLayout) {
+    }, texture_pixels, texture_size * texture_size * 4, &(WGPUTextureDataLayout) {
         .offset = 0,
-        .bytesPerRow = 4 * 2048,
-        .rowsPerImage = 2048
+        .bytesPerRow = 4 * texture_size,
+        .rowsPerImage = texture_size
     }, &(WGPUExtent3D) {
-        .width = 2048,
-        .height = 2048,
+        .width = texture_size,
+        .height = texture_size,
         .depthOrArrayLayers = 1
     });
 

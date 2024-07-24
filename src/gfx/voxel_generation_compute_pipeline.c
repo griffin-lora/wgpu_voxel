@@ -64,7 +64,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
         .mipLevelCount = 1,
         .sampleCount = 1,
         .size = { 32, 32, 32 },
-        .usage = WGPUTextureUsage_StorageBinding,
+        .usage = WGPUTextureUsage_StorageBinding | WGPUTextureUsage_TextureBinding,
         .viewFormatCount = 0,
         .viewFormats = NULL
     })) == NULL) {
