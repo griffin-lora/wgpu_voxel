@@ -127,7 +127,7 @@ result_t init_voxel_render_pipeline(void) {
             .topology = WGPUPrimitiveTopology_TriangleList,
             .stripIndexFormat = WGPUIndexFormat_Undefined,
             .frontFace = WGPUFrontFace_CCW,
-            .cullMode = WGPUCullMode_None // TODO: Update this
+            .cullMode = WGPUCullMode_Back
         },
         .fragment = &(WGPUFragmentState) {
             .module = fragment_shader_module,
