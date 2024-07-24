@@ -1,27 +1,32 @@
-#include "voxel_generation_compute_pipeline.h"
+#include "voxel_meshing_compute_pipeline.h"
 #include "gfx/gfx.h"
 #include "gfx/shader.h"
+#include "gfx/voxel_generation_compute_pipeline.h"
 #include "result.h"
+#include <cglm/types-struct.h>
 #include <dawn/webgpu.h>
 #include <stdio.h>
 #include <string.h>
 
 static WGPUComputePipeline pipeline;
 static WGPUBindGroup bind_group;
-static WGPUTexture voxel_texture;
-WGPUTextureView voxel_texture_view;
+static WGPUBuffer voxel_vertex_buffer;
 
-result_t init_voxel_generation_compute_pipeline(void) {
+typedef struct {
+    vec3s position;
+} voxel_vertex_t;
+
+result_t init_voxel_meshing_compute_pipeline(void) {
     result_t result;
 
     WGPUShaderModule shader_module;
-    if ((result = create_shader_module("shader/voxel_generation.spv", &shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/voxel_meshing.spv", &shader_module)) != result_success) {
         return result;
     }
 
     WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &(WGPUBindGroupLayoutDescriptor) {
-        .entryCount = 1,
-        .entries = (WGPUBindGroupLayoutEntry[1]) {
+        .entryCount = 2,
+        .entries = (WGPUBindGroupLayoutEntry[2]) {
             {
                 .binding = 0,
                 .visibility = WGPUShaderStage_Compute,
@@ -29,6 +34,13 @@ result_t init_voxel_generation_compute_pipeline(void) {
                     .access = WGPUStorageTextureAccess_WriteOnly,
                     .format = WGPUTextureFormat_R32Uint,
                     .viewDimension = WGPUTextureViewDimension_3D
+                }
+            },
+            {
+                .binding = 1,
+                .visibility = WGPUShaderStage_Compute,
+                .buffer = {
+                    .type = WGPUBufferBindingType_Storage
                 }
             }
         }
@@ -58,38 +70,26 @@ result_t init_voxel_generation_compute_pipeline(void) {
     wgpuBindGroupLayoutRelease(bind_group_layout);
     wgpuPipelineLayoutRelease(pipeline_layout);
 
-    if ((voxel_texture = wgpuDeviceCreateTexture(device, &(WGPUTextureDescriptor) {
-        .dimension = WGPUTextureDimension_3D,
-        .format = WGPUTextureFormat_R32Uint,
-        .mipLevelCount = 1,
-        .sampleCount = 1,
-        .size = { 32, 32, 32 },
-        .usage = WGPUTextureUsage_StorageBinding,
-        .viewFormatCount = 0,
-        .viewFormats = NULL
+    if ((voxel_vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_Storage,
+        .size = 32 * 32 * 32 * sizeof(voxel_vertex_t)
     })) == NULL) {
-        return result_texture_create_failure;
-    }
-
-    if ((voxel_texture_view = wgpuTextureCreateView(voxel_texture, &(WGPUTextureViewDescriptor) {
-        .aspect = WGPUTextureAspect_All,
-        .baseArrayLayer = 0,
-        .arrayLayerCount = 1,
-        .baseMipLevel = 0,
-        .mipLevelCount = 1,
-        .dimension = WGPUTextureViewDimension_3D,
-        .format = WGPUTextureFormat_R32Uint
-    })) == NULL) {
-        return result_texture_view_create_failure;
+        return result_buffer_create_failure;
     }
 
     if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
         .layout = bind_group_layout,
-        .entryCount = 1,
-        .entries = (WGPUBindGroupEntry[1]) {
+        .entryCount = 2,
+        .entries = (WGPUBindGroupEntry[2]) {
             {
                 .binding = 0,
                 .textureView = voxel_texture_view
+            },
+            {
+                .binding = 1,
+                .buffer = voxel_vertex_buffer,
+                .offset = 0,
+                .size = 32 * 32 * 32 * sizeof(voxel_vertex_t)
             }
         }
     })) == NULL) {
@@ -99,7 +99,9 @@ result_t init_voxel_generation_compute_pipeline(void) {
     return result_success;
 }
 
-result_t run_voxel_generation_compute_pipeline(void) {
+result_t run_voxel_meshing_compute_pipeline(void) {
+    wgpuDeviceTick(device); // TODO: Implement proper memory barrier here
+
     WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {});
     if (command_encoder == NULL) {
         return result_command_encoder_create_failure;
@@ -127,12 +129,13 @@ result_t run_voxel_generation_compute_pipeline(void) {
     wgpuCommandBufferRelease(command);
     wgpuCommandEncoderRelease(command_encoder);
 
+    wgpuDeviceTick(device); // TODO: Implement proper memory barrier here
+
     return result_success;
 }
 
-void term_voxel_generation_compute_pipeline(void) {
+void term_voxel_meshing_compute_pipeline(void) {
     wgpuComputePipelineRelease(pipeline);
     wgpuBindGroupRelease(bind_group);
-    wgpuTextureViewRelease(voxel_texture_view);
-    wgpuTextureRelease(voxel_texture);
+    wgpuBufferRelease(voxel_vertex_buffer);
 }

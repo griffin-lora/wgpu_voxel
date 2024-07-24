@@ -1,0 +1,18 @@
+#version 460
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+struct voxel_vertex_t {
+    vec3 position;
+};
+
+layout(set = 0, binding = 0, r32ui) readonly uniform uimage3D voxel_image;
+
+layout(set = 0, binding = 1) writeonly buffer out_t {
+    voxel_vertex_t vertices[];
+};
+
+void main() {
+    voxel_vertex_t vert = voxel_vertex_t(vec3(1, 1, 1));
+    vertices[gl_GlobalInvocationID.x] = vert;
+}
