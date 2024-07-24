@@ -312,11 +312,11 @@ result_t draw_voxel_render_pipeline(WGPUCommandEncoder command_encoder, WGPUText
     }
     
     wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, voxel_vertex_buffer, 0, 6 * sizeof(voxel_vertex_t));
+    wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, voxel_vertex_buffer, 0, 6 * 32 * 32 * 32 * sizeof(voxel_vertex_t));
 
     for (size_t i = 0; i < (sizeof(uniforms) / sizeof(*uniforms)); i++) {
         wgpuRenderPassEncoderSetBindGroup(render_pass_encoder, 0, bind_group, 1, (uint32_t[1]) { uniform_stride * (uint32_t) i });
-        wgpuRenderPassEncoderDraw(render_pass_encoder, 6, 1, 0, 0);
+        wgpuRenderPassEncoderDraw(render_pass_encoder, 6 * 32, 1, 0, 0);
     }
 
     wgpuRenderPassEncoderEnd(render_pass_encoder);
