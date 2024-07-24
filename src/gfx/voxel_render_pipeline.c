@@ -12,7 +12,6 @@
 #include <stb/stb_image.h>
 
 static WGPURenderPipeline pipeline;
-static WGPUBuffer vertex_buffer;
 static WGPUBuffer uniform_buffer;
 static WGPUBindGroup bind_group;
 static WGPUSampler sampler;
@@ -22,8 +21,6 @@ static WGPUTextureView texture_view;
 typedef struct {
     mat4s view_projection;
 } voxel_uniform_t;
-
-static voxel_vertex_t vertices[6];
 
 static voxel_uniform_t uniforms[1];
 
@@ -35,37 +32,6 @@ static uint32_t ceil_to_next_multiple(uint32_t value, uint32_t step) {
 result_t init_voxel_render_pipeline(void) {
     result_t result;
 
-    vertices[0] = (voxel_vertex_t) {
-        (vec3s) {{ -1.0f, -1.0f, 0.0f }},
-        (vec2s) {{ 0.0f, 1.0f }}
-    };
-    vertices[1] = (voxel_vertex_t) {
-        (vec3s) {{ 1.0f, -1.0f, 0.0f }},
-        (vec2s) {{ 1.0f, 1.0f }}
-    };
-    vertices[2] = (voxel_vertex_t) {
-        (vec3s) {{ 1.0f, 1.0f, 0.0f }},
-        (vec2s) {{ 1.0f, 0.0f }}
-    };
-    vertices[3] = (voxel_vertex_t) {
-        (vec3s) {{ 1.0f, 1.0f, 0.0f }},
-        (vec2s) {{ 1.0f, 0.0f }}
-    };
-    vertices[4] = (voxel_vertex_t) {
-        (vec3s) {{ -1.0f, 1.0f, 0.0f }},
-        (vec2s) {{ 0.0f, 0.0f }}
-    };
-    vertices[5] = (voxel_vertex_t) {
-        (vec3s) {{ -1.0f, -1.0f, 0.0f }},
-        (vec2s) {{ 0.0f, 1.0f }}
-    };
-
-    vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_Vertex,
-        .size = sizeof(vertices),
-        .mappedAtCreation = true
-    });
-
     uint32_t uniform_stride = ceil_to_next_multiple(sizeof(*uniforms), device_limits.limits.minUniformBufferOffsetAlignment);
 
     uint32_t uniforms_num_bytes = (sizeof(uniforms) / sizeof(*uniforms)) * uniform_stride;
@@ -76,14 +42,9 @@ result_t init_voxel_render_pipeline(void) {
         .mappedAtCreation = false
     });
     
-    if (vertex_buffer == NULL || uniform_buffer == NULL) {
+    if (uniform_buffer == NULL) {
         return result_buffer_create_failure;
     }
-
-    memcpy(wgpuBufferGetMappedRange(vertex_buffer, 0, sizeof(vertices)), vertices, sizeof(vertices));
-
-    wgpuBufferUnmap(vertex_buffer);
-
     WGPUShaderModule vertex_shader_module;
     WGPUShaderModule fragment_shader_module;
     if ((result = create_shader_module("shader/voxel_vertex.spv", &vertex_shader_module)) != result_success) {
@@ -149,11 +110,11 @@ result_t init_voxel_render_pipeline(void) {
                     },
                     {
                         .format = WGPUVertexFormat_Float32x2,
-                        .offset = sizeof(vertices->position),
+                        .offset = 16u,
                         .shaderLocation = 1
                     }
                 },
-                .arrayStride = sizeof(*vertices),
+                .arrayStride = sizeof(voxel_vertex_t),
                 .stepMode = WGPUVertexStepMode_Vertex
             },
             .module = vertex_shader_module,
@@ -351,7 +312,7 @@ result_t draw_voxel_render_pipeline(WGPUCommandEncoder command_encoder, WGPUText
     }
     
     wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, sizeof(vertices));
+    wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, voxel_vertex_buffer, 0, 6 * sizeof(voxel_vertex_t));
 
     for (size_t i = 0; i < (sizeof(uniforms) / sizeof(*uniforms)); i++) {
         wgpuRenderPassEncoderSetBindGroup(render_pass_encoder, 0, bind_group, 1, (uint32_t[1]) { uniform_stride * (uint32_t) i });
@@ -369,7 +330,6 @@ void term_voxel_render_pipeline() {
     wgpuTextureRelease(texture);
     wgpuSamplerRelease(sampler);
     wgpuBindGroupRelease(bind_group);
-    wgpuBufferRelease(vertex_buffer);
     wgpuBufferRelease(uniform_buffer);
     wgpuRenderPipelineRelease(pipeline);
 }

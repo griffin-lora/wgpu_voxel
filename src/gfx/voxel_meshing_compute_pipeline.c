@@ -9,7 +9,7 @@
 
 static WGPUComputePipeline pipeline;
 static WGPUBindGroup bind_group;
-static WGPUBuffer voxel_vertex_buffer;
+WGPUBuffer voxel_vertex_buffer;
 
 result_t init_voxel_meshing_compute_pipeline(void) {
     result_t result;
@@ -66,7 +66,7 @@ result_t init_voxel_meshing_compute_pipeline(void) {
     wgpuPipelineLayoutRelease(pipeline_layout);
 
     if ((voxel_vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_Storage,
+        .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_Vertex,
         .size = 32 * 32 * 32 * 6 * sizeof(voxel_vertex_t)
     })) == NULL) {
         return result_buffer_create_failure;
