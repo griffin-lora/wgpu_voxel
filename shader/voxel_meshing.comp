@@ -17,12 +17,12 @@ void main() {
     uint index = gl_GlobalInvocationID.z + gl_GlobalInvocationID.y * 32 + gl_GlobalInvocationID.x * 32 * 32;
     uint vertex_index = index * 6;
 
-    float offset = index * 2.0;
+    vec3 offset = vec3(gl_GlobalInvocationID.xyz) * 2;
 
-    vertices[vertex_index] = voxel_vertex_t(vec3(-1.0 + offset, -1.0, 0.0), vec2(0.0, 1.0));
-    vertices[vertex_index + 1] = voxel_vertex_t(vec3(1.0 + offset, -1.0, 0.0), vec2(1.0, 1.0));
-    vertices[vertex_index + 2] = voxel_vertex_t(vec3(1.0 + offset, 1.0, 0.0), vec2(1.0, 0.0));
-    vertices[vertex_index + 3] = voxel_vertex_t(vec3(1.0 + offset, 1.0, 0.0), vec2(1.0, 0.0));
-    vertices[vertex_index + 4] = voxel_vertex_t(vec3(-1.0 + offset, 1.0, 0.0), vec2(0.0, 0.0));
-    vertices[vertex_index + 5] = voxel_vertex_t(vec3(-1.0 + offset, -1.0, 0.0), vec2(0.0, 1.0));
+    vertices[vertex_index] = voxel_vertex_t(vec3(-1.0, -1.0, 0.0) + offset, vec2(0.0, 1.0));
+    vertices[vertex_index + 1] = voxel_vertex_t(vec3(1.0, -1.0, 0.0) + offset, vec2(1.0, 1.0));
+    vertices[vertex_index + 2] = voxel_vertex_t(vec3(1.0, 1.0, 0.0) + offset, vec2(1.0, 0.0));
+    vertices[vertex_index + 3] = voxel_vertex_t(vec3(1.0, 1.0, 0.0) + offset, vec2(1.0, 0.0));
+    vertices[vertex_index + 4] = voxel_vertex_t(vec3(-1.0, 1.0, 0.0) + offset, vec2(0.0, 0.0));
+    vertices[vertex_index + 5] = voxel_vertex_t(vec3(-1.0, -1.0, 0.0) + offset, vec2(0.0, 1.0));
 }
