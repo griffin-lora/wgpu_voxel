@@ -14,7 +14,7 @@ layout(set = 0, binding = 1) writeonly buffer out_t {
 };
 
 void main() {
-    uvec4 voxel_vec = imageLoad(voxel_image, ivec3(gl_GlobalInvocationID.xyz));
+    uvec4 voxel_vec = imageLoad(voxel_image, ivec3(gl_GlobalInvocationID));
     uint voxel = voxel_vec.x;
 
     uint index = gl_GlobalInvocationID.z + gl_GlobalInvocationID.y * 32 + gl_GlobalInvocationID.x * 32 * 32;
