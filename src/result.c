@@ -22,6 +22,7 @@ static const char* get_result_string(result_t result) {
         case result_sampler_create_failure: return "Failed to create sampler";
         case result_texture_create_failure: return "Failed to create texture";
         case result_texture_view_create_failure: return "Failed to create texture view";
+        case result_query_set_create_failure: return "Failed to create query set";
 
         case result_adapter_request_failure: return "Failed to request adapter";
         case result_device_request_failure: return "Failed to request device";

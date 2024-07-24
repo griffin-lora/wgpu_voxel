@@ -110,6 +110,15 @@ static result_t init_wgpu_core(void) {
     result_t result;
     
     if ((instance = wgpuCreateInstance(&(WGPUInstanceDescriptor) {
+        .nextInChain = (const WGPUChainedStruct*) (&(WGPUDawnTogglesDescriptor) {
+            .chain = {
+                .sType = WGPUSType_DawnTogglesDescriptor
+            },
+            .enabledToggleCount = 1,
+            .enabledToggles = (const char*[1]) { "allow_unsafe_apis" }, 
+            .disabledToggleCount = 0,
+            .disabledToggles = NULL
+        })
     })) == NULL) {
         return result_instance_create_failure;
     }
@@ -149,7 +158,8 @@ static result_t init_wgpu_core(void) {
     WGPURequiredLimits required_limits = get_required_limits(&adapter_supported_limits, surface_width, surface_height);
 
     wgpuAdapterRequestDevice(adapter, &(WGPUDeviceDescriptor) {
-        .requiredFeatureCount = 0,
+        .requiredFeatureCount = 1,
+        .requiredFeatures = (WGPUFeatureName[1]) { WGPUFeatureName_TimestampQuery },
         .requiredLimits = &required_limits,
         .defaultQueue = {},
         .deviceLostCallbackInfo = {

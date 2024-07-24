@@ -4,12 +4,30 @@
 #include "gfx/voxel_generation_compute_pipeline.h"
 #include "result.h"
 #include <dawn/webgpu.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static WGPUComputePipeline pipeline;
 static WGPUBindGroup bind_group;
 WGPUBuffer voxel_vertex_buffer;
+static WGPUQuerySet timestamp_query_set;
+static WGPUBuffer timestamp_resolve_buffer;
+static WGPUBuffer timestamp_read_buffer;
+
+static void timestamp_buffer_map_callback(WGPUMapAsyncStatus status, const char* msg, void*, void*) {
+    if (status != WGPUMapAsyncStatus_Success) {
+        printf("Failed to map buffer with message: %s\n", msg);
+        exit(1);
+    }
+
+    const uint64_t* timestamps = wgpuBufferGetConstMappedRange(timestamp_read_buffer, 0, 2 * sizeof(uint64_t));
+
+    printf("Meshing took: %ld nanoseconds\n", timestamps[1] - timestamps[0]);
+
+    wgpuBufferUnmap(timestamp_read_buffer);
+}
 
 result_t init_voxel_meshing_compute_pipeline(void) {
     result_t result;
@@ -90,6 +108,29 @@ result_t init_voxel_meshing_compute_pipeline(void) {
         return result_bind_group_create_failure;
     }
 
+    if ((timestamp_query_set = wgpuDeviceCreateQuerySet(device, &(WGPUQuerySetDescriptor) {
+        .type = WGPUQueryType_Timestamp,
+        .count = 2
+    })) == NULL) {
+        return result_query_set_create_failure;
+    }
+
+    if ((timestamp_resolve_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .size = 2 * sizeof(uint64_t),
+        .usage = WGPUBufferUsage_QueryResolve | WGPUBufferUsage_CopySrc,
+        .mappedAtCreation = false
+    })) == NULL) {
+        return result_buffer_create_failure;
+    }
+
+    if ((timestamp_read_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .size = 2 * sizeof(uint64_t),
+        .usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst,
+        .mappedAtCreation = false
+    })) == NULL) {
+        return result_buffer_create_failure;
+    }
+
     return result_success;
 }
 
@@ -101,7 +142,13 @@ result_t run_voxel_meshing_compute_pipeline(void) {
         return result_command_encoder_create_failure;
     }
 
-    WGPUComputePassEncoder compute_pass_encoder = wgpuCommandEncoderBeginComputePass(command_encoder, &(WGPUComputePassDescriptor) {});
+    WGPUComputePassEncoder compute_pass_encoder = wgpuCommandEncoderBeginComputePass(command_encoder, &(WGPUComputePassDescriptor) {
+        .timestampWrites = &(WGPUComputePassTimestampWrites) {
+            .beginningOfPassWriteIndex = 0,
+            .endOfPassWriteIndex = 1,
+            .querySet = timestamp_query_set
+        }
+    });
     if (compute_pass_encoder == NULL) {
         return result_compute_pass_encoder_create_failure;
     }
@@ -112,6 +159,9 @@ result_t run_voxel_meshing_compute_pipeline(void) {
 
     wgpuComputePassEncoderEnd(compute_pass_encoder);
     wgpuComputePassEncoderRelease(compute_pass_encoder);
+
+    wgpuCommandEncoderResolveQuerySet(command_encoder, timestamp_query_set, 0, 2, timestamp_resolve_buffer, 0);
+    wgpuCommandEncoderCopyBufferToBuffer(command_encoder, timestamp_resolve_buffer, 0, timestamp_read_buffer, 0, 2 * sizeof(uint64_t));
 
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(command_encoder, &(WGPUCommandBufferDescriptor) {});
     if (command == NULL) {
@@ -129,7 +179,15 @@ result_t run_voxel_meshing_compute_pipeline(void) {
 }
 
 void term_voxel_meshing_compute_pipeline(void) {
+    wgpuBufferMapAsync2(timestamp_read_buffer, WGPUMapMode_Read, 0, 2 * sizeof(uint64_t), (WGPUBufferMapCallbackInfo2) {
+        .mode = WGPUCallbackMode_AllowSpontaneous,
+        .callback = timestamp_buffer_map_callback
+    });
+
     wgpuComputePipelineRelease(pipeline);
     wgpuBindGroupRelease(bind_group);
     wgpuBufferRelease(voxel_vertex_buffer);
+    wgpuQuerySetRelease(timestamp_query_set);
+    wgpuBufferRelease(timestamp_resolve_buffer);
+    wgpuBufferRelease(timestamp_read_buffer);
 }

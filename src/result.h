@@ -20,6 +20,7 @@ typedef enum {
     result_sampler_create_failure,
     result_texture_create_failure,
     result_texture_view_create_failure,
+    result_query_set_create_failure,
     
     result_adapter_request_failure,
     result_device_request_failure,
