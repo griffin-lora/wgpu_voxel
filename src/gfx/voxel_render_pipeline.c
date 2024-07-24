@@ -105,12 +105,12 @@ result_t init_voxel_render_pipeline(void) {
                 .attributes = (WGPUVertexAttribute[2]) {
                     {
                         .format = WGPUVertexFormat_Float32x3,
-                        .offset = 0,
+                        .offset = offsetof(voxel_vertex_t, position),
                         .shaderLocation = 0
                     },
                     {
                         .format = WGPUVertexFormat_Float32x2,
-                        .offset = 16u,
+                        .offset = offsetof(voxel_vertex_t, texel_coord),
                         .shaderLocation = 1
                     }
                 },

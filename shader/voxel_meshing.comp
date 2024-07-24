@@ -10,7 +10,7 @@ struct voxel_vertex_t {
 layout(set = 0, binding = 0, r32ui) readonly uniform uimage3D voxel_image;
 
 layout(set = 0, binding = 1) writeonly buffer out_t {
-    layout(align = 16) voxel_vertex_t vertices[];
+    voxel_vertex_t vertices[];
 };
 
 void main() {

@@ -2,11 +2,15 @@
 #include "result.h"
 #include <cglm/types-struct.h>
 #include <dawn/webgpu.h>
+#include <stdalign.h>
+#include <assert.h>
 
 typedef struct {
     vec3s position;
-    vec2s texel_coord;
-} __attribute__((aligned (16))) voxel_vertex_t;
+    alignas(16) vec2s texel_coord;
+} voxel_vertex_t;
+
+static_assert(sizeof(voxel_vertex_t) % 16 == 0);
 
 extern WGPUBuffer voxel_vertex_buffer;
 
