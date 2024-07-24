@@ -1,6 +1,6 @@
 #include "gfx.h"
 #include "gfx/voxel_generation_compute_pipeline.h"
-#include "gfx/render_pipeline.h"
+#include "gfx/voxel_render_pipeline.h"
 #include "gfx/voxel_meshing_compute_pipeline.h"
 #include "glfw3webgpu.h"
 #include "result.h"
@@ -223,7 +223,7 @@ static result_t init_wgpu_core(void) {
         return result_texture_view_create_failure;
     }
 
-    if ((result = init_render_pipeline()) != result_success) {
+    if ((result = init_voxel_render_pipeline()) != result_success) {
         return result;
     }
 
@@ -248,7 +248,7 @@ static result_t init_wgpu_core(void) {
 
 static void term_wgpu_core(void) {
     wgpuDeviceTick(device);
-    term_render_pipeline();
+    term_voxel_render_pipeline();
     term_voxel_generation_compute_pipeline();
     term_voxel_meshing_compute_pipeline();
 
@@ -284,8 +284,6 @@ static void term_glfw_core(void) {
 result_t draw_gfx(void) {
     result_t result;
 
-    glfwPollEvents();
-
     WGPUSurfaceTexture texture;
     wgpuSurfaceGetCurrentTexture(surface, &texture);
 
@@ -314,7 +312,7 @@ result_t draw_gfx(void) {
         return result_command_encoder_create_failure;
     }
 
-    if ((result = draw_render_pipeline(command_encoder, surface_texture_view, depth_texture_view)) != result_success) {
+    if ((result = draw_voxel_render_pipeline(command_encoder, surface_texture_view, depth_texture_view)) != result_success) {
         return result;
     }
 

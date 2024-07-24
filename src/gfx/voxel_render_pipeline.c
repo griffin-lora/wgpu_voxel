@@ -1,10 +1,11 @@
-#include "render_pipeline.h"
+#include "voxel_render_pipeline.h"
+#include "camera.h"
 #include "gfx.h"
+#include "gfx/voxel_meshing_compute_pipeline.h"
 #include "shader.h"
 #include "result.h"
 #include <cglm/types-struct.h>
 #include <dawn/webgpu.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +13,6 @@
 
 static WGPURenderPipeline pipeline;
 static WGPUBuffer vertex_buffer;
-static WGPUBuffer index_buffer;
 static WGPUBuffer uniform_buffer;
 static WGPUBindGroup bind_group;
 static WGPUSampler sampler;
@@ -20,56 +20,49 @@ static WGPUTexture texture;
 static WGPUTextureView texture_view;
 
 typedef struct {
-    vec2s position;
-    vec2s texel_coord;
-} vertex_t;
+    mat4s view_projection;
+} voxel_uniform_t;
 
-static vertex_t vertices[4];
-static uint16_t indices[6] = {
-    0, 1, 2,
-    0, 2, 3
-};
+static voxel_vertex_t vertices[6];
 
-typedef struct {
-    vec2s offset;
-} uniform_t;
-
-static uniform_t uniforms[2];
+static voxel_uniform_t uniforms[1];
 
 static uint32_t ceil_to_next_multiple(uint32_t value, uint32_t step) {
     uint32_t divide_and_ceil = value / step + (value % step == 0 ? 0 : 1);
     return step * divide_and_ceil;
 }
 
-result_t init_render_pipeline(void) {
+result_t init_voxel_render_pipeline(void) {
     result_t result;
 
-    vertices[0] = (vertex_t) {
-        (vec2s) {{ -0.5f, -0.5f }},
+    vertices[0] = (voxel_vertex_t) {
+        (vec3s) {{ -1.0f, -1.0f, 0.0f }},
         (vec2s) {{ 0.0f, 1.0f }}
     };
-    vertices[1] = (vertex_t) {
-        (vec2s) {{ 0.5f, -0.5f }},
+    vertices[1] = (voxel_vertex_t) {
+        (vec3s) {{ 1.0f, -1.0f, 0.0f }},
         (vec2s) {{ 1.0f, 1.0f }}
     };
-    vertices[2] = (vertex_t) {
-        (vec2s) {{ 0.5f, 0.5f }},
+    vertices[2] = (voxel_vertex_t) {
+        (vec3s) {{ 1.0f, 1.0f, 0.0f }},
         (vec2s) {{ 1.0f, 0.0f }}
     };
-    vertices[3] = (vertex_t) {
-        (vec2s) {{ -0.5f, 0.5f }},
+    vertices[3] = (voxel_vertex_t) {
+        (vec3s) {{ 1.0f, 1.0f, 0.0f }},
+        (vec2s) {{ 1.0f, 0.0f }}
+    };
+    vertices[4] = (voxel_vertex_t) {
+        (vec3s) {{ -1.0f, 1.0f, 0.0f }},
         (vec2s) {{ 0.0f, 0.0f }}
+    };
+    vertices[5] = (voxel_vertex_t) {
+        (vec3s) {{ -1.0f, -1.0f, 0.0f }},
+        (vec2s) {{ 0.0f, 1.0f }}
     };
 
     vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
         .usage = WGPUBufferUsage_Vertex,
         .size = sizeof(vertices),
-        .mappedAtCreation = true
-    });
-
-    index_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_Index,
-        .size = sizeof(indices),
         .mappedAtCreation = true
     });
 
@@ -83,22 +76,20 @@ result_t init_render_pipeline(void) {
         .mappedAtCreation = false
     });
     
-    if (vertex_buffer == NULL || index_buffer == NULL || uniform_buffer == NULL) {
+    if (vertex_buffer == NULL || uniform_buffer == NULL) {
         return result_buffer_create_failure;
     }
 
     memcpy(wgpuBufferGetMappedRange(vertex_buffer, 0, sizeof(vertices)), vertices, sizeof(vertices));
-    memcpy(wgpuBufferGetMappedRange(index_buffer, 0, sizeof(indices)), indices, sizeof(indices));
 
     wgpuBufferUnmap(vertex_buffer);
-    wgpuBufferUnmap(index_buffer);
 
     WGPUShaderModule vertex_shader_module;
     WGPUShaderModule fragment_shader_module;
-    if ((result = create_shader_module("shader/vertex.spv", &vertex_shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/voxel_vertex.spv", &vertex_shader_module)) != result_success) {
         return result;
     }
-    if ((result = create_shader_module("shader/fragment.spv", &fragment_shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/voxel_fragment.spv", &fragment_shader_module)) != result_success) {
         return result;
     }
 
@@ -152,7 +143,7 @@ result_t init_render_pipeline(void) {
                 .attributeCount = 2,
                 .attributes = (WGPUVertexAttribute[2]) {
                     {
-                        .format = WGPUVertexFormat_Float32x2,
+                        .format = WGPUVertexFormat_Float32x3,
                         .offset = 0,
                         .shaderLocation = 0
                     },
@@ -323,17 +314,12 @@ result_t init_render_pipeline(void) {
     return result_success;
 }
 
-static float time = 0.0f;
-
-result_t draw_render_pipeline(WGPUCommandEncoder command_encoder, WGPUTextureView surface_texture_view, WGPUTextureView depth_texture_view) {
+result_t draw_voxel_render_pipeline(WGPUCommandEncoder command_encoder, WGPUTextureView surface_texture_view, WGPUTextureView depth_texture_view) {
     uint32_t uniform_stride = ceil_to_next_multiple(sizeof(*uniforms), device_limits.limits.minUniformBufferOffsetAlignment);
 
-    time += 0.01f;
+    uniforms[0].view_projection = get_view_projection();
 
-    uniforms[0].offset = (vec2s) {{ 0.3f * cosf(time) - 0.5f, 0.3f * sinf(time) }};
-    uniforms[1].offset = (vec2s) {{ 0.3f * cosf(time) + 0.5f, 0.3f * sinf(time) }};
-
-    for (size_t i = 0; i < 2; i++) {
+    for (size_t i = 0; i < (sizeof(uniforms) / sizeof(*uniforms)); i++) {
         wgpuQueueWriteBuffer(queue, uniform_buffer, uniform_stride * i, &uniforms[i], sizeof(uniforms[i]));
     }
 
@@ -344,7 +330,7 @@ result_t draw_render_pipeline(WGPUCommandEncoder command_encoder, WGPUTextureVie
             .resolveTarget = NULL,
             .loadOp = WGPULoadOp_Clear,
             .storeOp = WGPUStoreOp_Store,
-            .clearValue = (WGPUColor) { 0.9, 0.1, 0.2, 1.0 },
+            .clearValue = (WGPUColor) { 0.62f, 0.78f, 1.0f, 1.0f },
             .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
         },
         .depthStencilAttachment = &(WGPURenderPassDepthStencilAttachment) {
@@ -366,11 +352,10 @@ result_t draw_render_pipeline(WGPUCommandEncoder command_encoder, WGPUTextureVie
     
     wgpuRenderPassEncoderSetPipeline(render_pass_encoder, pipeline);
     wgpuRenderPassEncoderSetVertexBuffer(render_pass_encoder, 0, vertex_buffer, 0, sizeof(vertices));
-    wgpuRenderPassEncoderSetIndexBuffer(render_pass_encoder, index_buffer, WGPUIndexFormat_Uint16, 0, sizeof(indices));
 
-    for (size_t i = 0; i < 2; i++) {
+    for (size_t i = 0; i < (sizeof(uniforms) / sizeof(*uniforms)); i++) {
         wgpuRenderPassEncoderSetBindGroup(render_pass_encoder, 0, bind_group, 1, (uint32_t[1]) { uniform_stride * (uint32_t) i });
-        wgpuRenderPassEncoderDrawIndexed(render_pass_encoder, sizeof(indices) / sizeof(*indices), 1, 0, 0, 0);
+        wgpuRenderPassEncoderDraw(render_pass_encoder, 6, 1, 0, 0);
     }
 
     wgpuRenderPassEncoderEnd(render_pass_encoder);
@@ -379,13 +364,12 @@ result_t draw_render_pipeline(WGPUCommandEncoder command_encoder, WGPUTextureVie
     return result_success;
 }
 
-void term_render_pipeline() {
+void term_voxel_render_pipeline() {
     wgpuTextureViewRelease(texture_view);
     wgpuTextureRelease(texture);
     wgpuSamplerRelease(sampler);
     wgpuBindGroupRelease(bind_group);
     wgpuBufferRelease(vertex_buffer);
-    wgpuBufferRelease(index_buffer);
     wgpuBufferRelease(uniform_buffer);
     wgpuRenderPipelineRelease(pipeline);
 }

@@ -3,7 +3,6 @@
 #include "gfx/shader.h"
 #include "gfx/voxel_generation_compute_pipeline.h"
 #include "result.h"
-#include <cglm/types-struct.h>
 #include <dawn/webgpu.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,11 +10,6 @@
 static WGPUComputePipeline pipeline;
 static WGPUBindGroup bind_group;
 static WGPUBuffer voxel_vertex_buffer;
-
-typedef struct {
-    vec3s position;
-    vec2s texel_coord;
-} voxel_vertex_t;
 
 result_t init_voxel_meshing_compute_pipeline(void) {
     result_t result;
