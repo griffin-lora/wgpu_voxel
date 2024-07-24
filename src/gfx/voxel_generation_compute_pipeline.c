@@ -1,4 +1,4 @@
-#include "compute_pipeline.h"
+#include "voxel_generation_compute_pipeline.h"
 #include "gfx/gfx.h"
 #include "gfx/shader.h"
 #include "result.h"
@@ -11,11 +11,11 @@ static WGPUBindGroup bind_group;
 static WGPUTexture voxel_texture;
 static WGPUTextureView voxel_texture_view;
 
-result_t init_compute_pipeline(void) {
+result_t init_voxel_generation_compute_pipeline(void) {
     result_t result;
 
     WGPUShaderModule shader_module;
-    if ((result = create_shader_module("shader/voxel_generator.spv", &shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/voxel_generation.spv", &shader_module)) != result_success) {
         return result;
     }
 
@@ -99,7 +99,7 @@ result_t init_compute_pipeline(void) {
     return result_success;
 }
 
-result_t run_compute_pipeline(void) {
+result_t run_voxel_generation_compute_pipeline(void) {
     WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {});
     if (command_encoder == NULL) {
         return result_command_encoder_create_failure;
@@ -130,7 +130,7 @@ result_t run_compute_pipeline(void) {
     return result_success;
 }
 
-void term_compute_pipeline(void) {
+void term_voxel_generation_compute_pipeline(void) {
     wgpuComputePipelineRelease(pipeline);
     wgpuBindGroupRelease(bind_group);
     wgpuTextureViewRelease(voxel_texture_view);

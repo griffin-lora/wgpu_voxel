@@ -1,5 +1,5 @@
 #include "gfx.h"
-#include "gfx/compute_pipeline.h"
+#include "gfx/voxel_generation_compute_pipeline.h"
 #include "gfx/render_pipeline.h"
 #include "glfw3webgpu.h"
 #include "result.h"
@@ -226,11 +226,11 @@ static result_t init_wgpu_core(void) {
         return result;
     }
 
-    if ((result = init_compute_pipeline()) != result_success) {
+    if ((result = init_voxel_generation_compute_pipeline()) != result_success) {
         return result;
     }
 
-    if ((result = run_compute_pipeline()) != result_success) {
+    if ((result = run_voxel_generation_compute_pipeline()) != result_success) {
         return result;
     }
 
@@ -240,7 +240,7 @@ static result_t init_wgpu_core(void) {
 static void term_wgpu_core(void) {
     wgpuDeviceTick(device);
     term_render_pipeline();
-    term_compute_pipeline();
+    term_voxel_generation_compute_pipeline();
 
     wgpuTextureViewRelease(depth_texture_view);
     wgpuTextureRelease(depth_texture);
