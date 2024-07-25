@@ -9,29 +9,32 @@ struct voxel_vertex_t {
 
 layout(set = 0, binding = 0, r32ui) readonly uniform uimage3D voxel_image;
 
-layout(set = 0, binding = 1) writeonly buffer out_t {
+layout(set = 0, binding = 1) writeonly buffer num_vertices_out_t {
+    uint num_vertices;
+};
+
+layout(set = 0, binding = 2) writeonly buffer vertices_out_t {
     voxel_vertex_t vertices[];
 };
 
 void main() {
+    vec3 voxel_position = vec3(gl_GlobalInvocationID) * 2;
+
     uvec4 voxel_vec = imageLoad(voxel_image, ivec3(gl_GlobalInvocationID));
     uint voxel = voxel_vec.x;
 
-    uint index = gl_GlobalInvocationID.z + gl_GlobalInvocationID.y * 32 + gl_GlobalInvocationID.x * 32 * 32;
-    uint vertex_index = index * 6;
-
-    vec3 offset = vec3(gl_GlobalInvocationID.xyz) * 2;
+    uint vertex_index = atomicAdd(num_vertices, 6);
 
     if (voxel == 0) {
         for (uint i = 0; i < 6; i++) {
             vertices[vertex_index + i] = voxel_vertex_t(vec3(0), vec2(0));
         }
     } else {
-        vertices[vertex_index] = voxel_vertex_t(vec3(-1.0, -1.0, 0.0) + offset, vec2(0.0, 1.0));
-        vertices[vertex_index + 1] = voxel_vertex_t(vec3(1.0, -1.0, 0.0) + offset, vec2(1.0, 1.0));
-        vertices[vertex_index + 2] = voxel_vertex_t(vec3(1.0, 1.0, 0.0) + offset, vec2(1.0, 0.0));
-        vertices[vertex_index + 3] = voxel_vertex_t(vec3(1.0, 1.0, 0.0) + offset, vec2(1.0, 0.0));
-        vertices[vertex_index + 4] = voxel_vertex_t(vec3(-1.0, 1.0, 0.0) + offset, vec2(0.0, 0.0));
-        vertices[vertex_index + 5] = voxel_vertex_t(vec3(-1.0, -1.0, 0.0) + offset, vec2(0.0, 1.0));
+        vertices[vertex_index] = voxel_vertex_t(vec3(-1.0, -1.0, 0.0) + voxel_position, vec2(0.0, 1.0));
+        vertices[vertex_index + 1] = voxel_vertex_t(vec3(1.0, -1.0, 0.0) + voxel_position, vec2(1.0, 1.0));
+        vertices[vertex_index + 2] = voxel_vertex_t(vec3(1.0, 1.0, 0.0) + voxel_position, vec2(1.0, 0.0));
+        vertices[vertex_index + 3] = voxel_vertex_t(vec3(1.0, 1.0, 0.0) + voxel_position, vec2(1.0, 0.0));
+        vertices[vertex_index + 4] = voxel_vertex_t(vec3(-1.0, 1.0, 0.0) + voxel_position, vec2(0.0, 0.0));
+        vertices[vertex_index + 5] = voxel_vertex_t(vec3(-1.0, -1.0, 0.0) + voxel_position, vec2(0.0, 1.0));
     }
 }

@@ -11,6 +11,7 @@
 
 static WGPUComputePipeline pipeline;
 static WGPUBindGroup bind_group;
+static WGPUBuffer voxel_vertex_count_buffer;
 WGPUBuffer voxel_vertex_buffer;
 static WGPUQuerySet timestamp_query_set;
 static WGPUBuffer timestamp_resolve_buffer;
@@ -38,8 +39,8 @@ result_t init_voxel_meshing_compute_pipeline(void) {
     }
 
     WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &(WGPUBindGroupLayoutDescriptor) {
-        .entryCount = 2,
-        .entries = (WGPUBindGroupLayoutEntry[2]) {
+        .entryCount = 3,
+        .entries = (WGPUBindGroupLayoutEntry[3]) {
             {
                 .binding = 0,
                 .visibility = WGPUShaderStage_Compute,
@@ -50,6 +51,13 @@ result_t init_voxel_meshing_compute_pipeline(void) {
             },
             {
                 .binding = 1,
+                .visibility = WGPUShaderStage_Compute,
+                .buffer = {
+                    .type = WGPUBufferBindingType_Storage
+                }
+            },
+            {
+                .binding = 2,
                 .visibility = WGPUShaderStage_Compute,
                 .buffer = {
                     .type = WGPUBufferBindingType_Storage
@@ -82,6 +90,14 @@ result_t init_voxel_meshing_compute_pipeline(void) {
     wgpuBindGroupLayoutRelease(bind_group_layout);
     wgpuPipelineLayoutRelease(pipeline_layout);
 
+    if ((voxel_vertex_count_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
+        .usage = WGPUBufferUsage_Storage,
+        .size = sizeof(uint32_t),
+        .mappedAtCreation = false
+    })) == NULL) {
+        return result_buffer_create_failure;
+    }
+
     if ((voxel_vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
         .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_Vertex,
         .size = 32 * 32 * 32 * 6 * sizeof(voxel_vertex_t)
@@ -91,14 +107,20 @@ result_t init_voxel_meshing_compute_pipeline(void) {
 
     if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
         .layout = bind_group_layout,
-        .entryCount = 2,
-        .entries = (WGPUBindGroupEntry[2]) {
+        .entryCount = 3,
+        .entries = (WGPUBindGroupEntry[3]) {
             {
                 .binding = 0,
                 .textureView = voxel_texture_view
             },
             {
                 .binding = 1,
+                .buffer = voxel_vertex_count_buffer,
+                .offset = 0,
+                .size = sizeof(uint32_t)
+            },
+            {
+                .binding = 2,
                 .buffer = voxel_vertex_buffer,
                 .offset = 0,
                 .size = 32 * 32 * 32 * 6 * sizeof(voxel_vertex_t)
@@ -186,6 +208,7 @@ void term_voxel_meshing_compute_pipeline(void) {
 
     wgpuComputePipelineRelease(pipeline);
     wgpuBindGroupRelease(bind_group);
+    wgpuBufferRelease(voxel_vertex_count_buffer);
     wgpuBufferRelease(voxel_vertex_buffer);
     wgpuQuerySetRelease(timestamp_query_set);
     wgpuBufferRelease(timestamp_resolve_buffer);
