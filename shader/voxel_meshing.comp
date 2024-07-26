@@ -93,18 +93,23 @@ void main() {
 
     if (px_visible) {
         add_face_vertices(voxel_position, vertex_index, 0);
+        vertex_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (nx_visible) {
         add_face_vertices(voxel_position, vertex_index, 1);
+        vertex_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (py_visible) {
         add_face_vertices(voxel_position, vertex_index, 2);
+        vertex_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (ny_visible) {
         add_face_vertices(voxel_position, vertex_index, 3);
+        vertex_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (pz_visible) {
         add_face_vertices(voxel_position, vertex_index, 4);
+        vertex_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (nz_visible) {
         add_face_vertices(voxel_position, vertex_index, 5);
