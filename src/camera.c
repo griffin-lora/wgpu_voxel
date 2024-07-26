@@ -130,7 +130,7 @@ void camera_update(void) {
 
     mat3s movement_mat = (mat3s) {{
         { cam_forward.x, cam_forward.y, cam_forward.z },
-        { 0, 1, 0 },
+        { 0.0, -1.0, 0.0 },
         { cam_forward.z, 0, -cam_forward.x }
     }};
     glm_normalize(movement_mat.col[2].raw);

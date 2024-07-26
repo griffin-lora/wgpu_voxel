@@ -100,7 +100,7 @@ result_t init_voxel_meshing_compute_pipeline(void) {
 
     if ((voxel_vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
         .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_Vertex,
-        .size = 32 * 32 * 32 * 6 * sizeof(voxel_vertex_t)
+        .size = 6 * 6 * 32 * 32 * 32 * 6 * sizeof(voxel_vertex_t)
     })) == NULL) {
         return result_buffer_create_failure;
     }
@@ -123,7 +123,7 @@ result_t init_voxel_meshing_compute_pipeline(void) {
                 .binding = 2,
                 .buffer = voxel_vertex_buffer,
                 .offset = 0,
-                .size = 32 * 32 * 32 * 6 * sizeof(voxel_vertex_t)
+                .size = 6 * 6 * 32 * 32 * 32 * sizeof(voxel_vertex_t)
             }
         }
     })) == NULL) {
