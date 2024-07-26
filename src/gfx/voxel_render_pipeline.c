@@ -12,6 +12,14 @@
 #include <string.h>
 #include <stb/stb_image.h>
 
+#define NUM_VOXEL_TEXTURE_LAYERS 3
+
+static const char* voxel_texture_layer_paths[NUM_VOXEL_TEXTURE_LAYERS] = {
+    "texture/cube_voxel_0.png",
+    "texture/cube_voxel_1.png",
+    "texture/cube_voxel_2.png"
+};
+
 static WGPURenderPipeline pipeline;
 static WGPUBuffer uniform_buffer;
 static WGPUBindGroup bind_group;
@@ -72,7 +80,7 @@ result_t init_voxel_render_pipeline(void) {
                 .visibility = WGPUShaderStage_Fragment,
                 .texture = {
                     .sampleType = WGPUTextureSampleType_Float,
-                    .viewDimension = WGPUTextureViewDimension_2D
+                    .viewDimension = WGPUTextureViewDimension_2DArray
                 }
             },
             {
@@ -102,8 +110,8 @@ result_t init_voxel_render_pipeline(void) {
         .vertex = {
             .bufferCount = 1,
             .buffers = &(WGPUVertexBufferLayout) {
-                .attributeCount = 2,
-                .attributes = (WGPUVertexAttribute[2]) {
+                .attributeCount = 3,
+                .attributes = (WGPUVertexAttribute[3]) {
                     {
                         .format = WGPUVertexFormat_Float32x3,
                         .offset = offsetof(voxel_vertex_t, vertex_position),
@@ -113,6 +121,11 @@ result_t init_voxel_render_pipeline(void) {
                         .format = WGPUVertexFormat_Uint32,
                         .offset = offsetof(voxel_vertex_t, vertex_index),
                         .shaderLocation = 1
+                    },
+                    {
+                        .format = WGPUVertexFormat_Uint32,
+                        .offset = offsetof(voxel_vertex_t, voxel_type),
+                        .shaderLocation = 2
                     }
                 },
                 .arrayStride = sizeof(voxel_vertex_t),
@@ -199,24 +212,15 @@ result_t init_voxel_render_pipeline(void) {
     })) == NULL) {
         return result_sampler_create_failure;
     }
-
-    int32_t texture_width;
-    int32_t texture_height;
-
-    const void* texture_pixels = stbi_load("texture/cube_voxel_0.png", &texture_width, &texture_height, (int[1]) { 0 }, STBI_rgb_alpha);
-
-    if (texture_pixels == NULL || texture_width != texture_height || texture_width == 0 || (texture_width & (texture_width - 1)) != 0) {
-        return result_file_read_failure; // TODO: Use a different error
-    }
     
-    uint32_t texture_size = (uint32_t) texture_width;
+    uint32_t texture_size = 16;
 
     if ((texture = wgpuDeviceCreateTexture(device, &(WGPUTextureDescriptor) {
         .dimension = WGPUTextureDimension_2D,
         .format = WGPUTextureFormat_RGBA8UnormSrgb,
         .mipLevelCount = 1,
         .sampleCount = 1,
-        .size = { texture_size, texture_size, 1 },
+        .size = { texture_size, texture_size, NUM_VOXEL_TEXTURE_LAYERS },
         .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
         .viewFormatCount = 0,
         .viewFormats = NULL
@@ -227,31 +231,14 @@ result_t init_voxel_render_pipeline(void) {
     if ((texture_view = wgpuTextureCreateView(texture, &(WGPUTextureViewDescriptor) {
         .aspect = WGPUTextureAspect_All,
         .baseArrayLayer = 0,
-        .arrayLayerCount = 1,
+        .arrayLayerCount = NUM_VOXEL_TEXTURE_LAYERS,
         .baseMipLevel = 0,
         .mipLevelCount = 1,
-        .dimension = WGPUTextureViewDimension_2D,
+        .dimension = WGPUTextureViewDimension_2DArray,
         .format = WGPUTextureFormat_RGBA8UnormSrgb
     })) == NULL) {
         return result_texture_view_create_failure;
     }
-
-    wgpuQueueWriteTexture(queue, &(WGPUImageCopyTexture) {
-        .texture = texture,
-        .mipLevel = 0,
-        .origin = { 0, 0, 0 },
-        .aspect = WGPUTextureAspect_All
-    }, texture_pixels, texture_size * texture_size * 4, &(WGPUTextureDataLayout) {
-        .offset = 0,
-        .bytesPerRow = 4 * texture_size,
-        .rowsPerImage = texture_size
-    }, &(WGPUExtent3D) {
-        .width = texture_size,
-        .height = texture_size,
-        .depthOrArrayLayers = 1
-    });
-
-    stbi_image_free((void*) texture_pixels);
 
     if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
         .layout = bind_group_layout,
@@ -274,6 +261,34 @@ result_t init_voxel_render_pipeline(void) {
         }
     })) == NULL) {
         return result_bind_group_create_failure;
+    }
+
+    for (uint32_t layer_index = 0; layer_index < NUM_VOXEL_TEXTURE_LAYERS; layer_index++) {
+        int32_t width;
+        int32_t height;
+
+        const void* pixels = stbi_load(voxel_texture_layer_paths[layer_index], &width, &height, (int[1]) { 0 }, STBI_rgb_alpha);
+
+        if (pixels == NULL || width != height || width != (int32_t) texture_size) {
+            return result_file_read_failure; // TODO: Use a different error
+        }
+
+        wgpuQueueWriteTexture(queue, &(WGPUImageCopyTexture) {
+            .texture = texture,
+            .mipLevel = 0,
+            .origin = { 0, 0, layer_index },
+            .aspect = WGPUTextureAspect_All
+        }, pixels, texture_size * texture_size * 4, &(WGPUTextureDataLayout) {
+            .offset = 0,
+            .bytesPerRow = 4 * texture_size,
+            .rowsPerImage = texture_size
+        }, &(WGPUExtent3D) {
+            .width = texture_size,
+            .height = texture_size,
+            .depthOrArrayLayers = 1
+        });
+
+        stbi_image_free((void*) pixels);
     }
 
     return result_success;

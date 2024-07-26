@@ -7,8 +7,9 @@
 #include <stdint.h>
 
 typedef struct {
-    vec3s vertex_position;
+    alignas(16) vec3s vertex_position;
     uint32_t vertex_index;
+    uint32_t voxel_type;
 } voxel_vertex_t;
 
 static_assert(sizeof(voxel_vertex_t) % 16 == 0);

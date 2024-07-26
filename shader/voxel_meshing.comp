@@ -6,6 +6,7 @@
 struct voxel_vertex_t {
     vec3 vertex_position;
     uint vertex_index;
+    uint voxel_type;
 };
 
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
@@ -17,12 +18,12 @@ layout(set = 0, binding = 1) writeonly buffer num_vertices_out_t {
 };
 
 layout(set = 0, binding = 2) writeonly buffer vertices_out_t {
-    layout(align = 16) voxel_vertex_t vertices[];
+    layout(align = 32) voxel_vertex_t vertices[];
 };
 
-void add_face_vertices(vec3 voxel_position, uint index, uint face_index) {
+void add_face_vertices(vec3 voxel_position, uint voxel_type, uint vertices_index, uint face_index) {
     for (int i = 0; i < NUM_CUBE_VOXEL_FACE_VERTICES; i++) {
-        vertices[index + i] = voxel_vertex_t(voxel_position, NUM_CUBE_VOXEL_FACE_VERTICES * face_index + i);
+        vertices[vertices_index + i] = voxel_vertex_t(voxel_position, NUM_CUBE_VOXEL_FACE_VERTICES * face_index + i, voxel_type);
     }
 }
 
@@ -43,29 +44,29 @@ void main() {
     vec3 voxel_position = vec3(gl_GlobalInvocationID);
 
     uint num_voxel_vertices = NUM_CUBE_VOXEL_FACE_VERTICES * (uint(px_visible) + uint(nx_visible) + uint(py_visible) + uint(ny_visible) + uint(pz_visible) + uint(nz_visible));
-    uint index = atomicAdd(num_vertices, num_voxel_vertices);
+    uint vertices_index = atomicAdd(num_vertices, num_voxel_vertices);
 
     if (px_visible) {
-        add_face_vertices(voxel_position, index, 0);
-        index += NUM_CUBE_VOXEL_FACE_VERTICES;
+        add_face_vertices(voxel_position, voxel_type, vertices_index, 0);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (nx_visible) {
-        add_face_vertices(voxel_position, index, 1);
-        index += NUM_CUBE_VOXEL_FACE_VERTICES;
+        add_face_vertices(voxel_position, voxel_type, vertices_index, 1);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (py_visible) {
-        add_face_vertices(voxel_position, index, 2);
-        index += NUM_CUBE_VOXEL_FACE_VERTICES;
+        add_face_vertices(voxel_position, voxel_type, vertices_index, 2);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (ny_visible) {
-        add_face_vertices(voxel_position, index, 3);
-        index += NUM_CUBE_VOXEL_FACE_VERTICES;
+        add_face_vertices(voxel_position, voxel_type, vertices_index, 3);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (pz_visible) {
-        add_face_vertices(voxel_position, index, 4);
-        index += NUM_CUBE_VOXEL_FACE_VERTICES;
+        add_face_vertices(voxel_position, voxel_type, vertices_index, 4);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
     }
     if (nz_visible) {
-        add_face_vertices(voxel_position, index, 5);
+        add_face_vertices(voxel_position, voxel_type, vertices_index, 5);
     }
 }
