@@ -17,7 +17,7 @@ layout(set = 0, binding = 1) writeonly buffer num_vertices_out_t {
 };
 
 layout(set = 0, binding = 2) writeonly buffer vertices_out_t {
-    voxel_vertex_t vertices[];
+    layout(align = 16) voxel_vertex_t vertices[];
 };
 
 void add_face_vertices(vec3 voxel_position, uint index, uint face_index) {
