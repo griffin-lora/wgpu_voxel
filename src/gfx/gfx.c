@@ -2,8 +2,9 @@
 #include "gfx/voxel_generation_compute_pipeline.h"
 #include "gfx/voxel_render_pipeline.h"
 #include "gfx/voxel_meshing_compute_pipeline.h"
-#include "glfw3webgpu.h"
 #include "result.h"
+#include <glfw3webgpu.h>
+#include <GLFW/glfw3.h>
 #include <cglm/types-struct.h>
 #include <stdio.h>
 #include <stdlib.h>
