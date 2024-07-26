@@ -4,10 +4,11 @@
 #include <dawn/webgpu.h>
 #include <stdalign.h>
 #include <assert.h>
+#include <stdint.h>
 
 typedef struct {
-    vec3s position;
-    alignas(16) vec2s texel_coord;
+    vec3s vertex_position;
+    uint32_t vertex_index;
 } voxel_vertex_t;
 
 static_assert(sizeof(voxel_vertex_t) % 16 == 0);
