@@ -1,4 +1,5 @@
 #version 460
+#include "voxel.glsl"
 
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
@@ -6,10 +7,10 @@ layout(set = 0, binding = 0, r32ui) writeonly uniform uimage3D voxel_image;
 
 void main() {
     if (gl_GlobalInvocationID.y < 5) {
-        imageStore(voxel_image, ivec3(gl_GlobalInvocationID), uvec4(1));
+        imageStore(voxel_image, ivec3(gl_GlobalInvocationID), uvec4(VOXEL_TYPE_GRASS));
     } else if (gl_GlobalInvocationID.y == 5) {
-        imageStore(voxel_image, ivec3(gl_GlobalInvocationID), uvec4(0));
+        imageStore(voxel_image, ivec3(gl_GlobalInvocationID), uvec4(VOXEL_TYPE_STONE));
     } else {
-        imageStore(voxel_image, ivec3(gl_GlobalInvocationID), uvec4(0));
+        imageStore(voxel_image, ivec3(gl_GlobalInvocationID), uvec4(VOXEL_TYPE_AIR));
     }
 }
