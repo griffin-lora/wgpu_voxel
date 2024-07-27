@@ -3,6 +3,7 @@
 #include "gfx/shader.h"
 #include "gfx/voxel_generation_compute_pipeline.h"
 #include "result.h"
+#include "voxel.h"
 #include <dawn/webgpu.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -100,7 +101,7 @@ result_t init_voxel_meshing_compute_pipeline(void) {
 
     if ((voxel_vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
         .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_Vertex,
-        .size = 6 * 6 * 32 * 32 * 32 * 6 * sizeof(voxel_vertex_t)
+        .size = NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * sizeof(voxel_vertex_t)
     })) == NULL) {
         return result_buffer_create_failure;
     }
@@ -123,7 +124,7 @@ result_t init_voxel_meshing_compute_pipeline(void) {
                 .binding = 2,
                 .buffer = voxel_vertex_buffer,
                 .offset = 0,
-                .size = 6 * 6 * 32 * 32 * 32 * sizeof(voxel_vertex_t)
+                .size = NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * sizeof(voxel_vertex_t)
             }
         }
     })) == NULL) {

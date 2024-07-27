@@ -2,6 +2,7 @@
 #include "gfx/gfx.h"
 #include "gfx/shader.h"
 #include "result.h"
+#include "voxel.h"
 #include <dawn/webgpu.h>
 #include <stdio.h>
 #include <string.h>
@@ -63,7 +64,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
         .format = WGPUTextureFormat_R32Uint,
         .mipLevelCount = 1,
         .sampleCount = 1,
-        .size = { 32, 32, 32 },
+        .size = { VOXEL_REGION_SIZE, VOXEL_REGION_SIZE, VOXEL_REGION_SIZE },
         .usage = WGPUTextureUsage_StorageBinding | WGPUTextureUsage_TextureBinding,
         .viewFormatCount = 0,
         .viewFormats = NULL
