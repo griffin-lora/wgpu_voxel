@@ -12,12 +12,13 @@
 #include <string.h>
 #include <stb/stb_image.h>
 
-#define NUM_VOXEL_TEXTURE_LAYERS 3
+#define NUM_VOXEL_TEXTURE_LAYERS 4
 
 static const char* voxel_texture_layer_paths[NUM_VOXEL_TEXTURE_LAYERS] = {
     "texture/cube_voxel_0.png",
     "texture/cube_voxel_1.png",
-    "texture/cube_voxel_2.png"
+    "texture/cube_voxel_2.png",
+    "texture/cube_voxel_4.png"
 };
 
 static WGPURenderPipeline pipeline;

@@ -70,10 +70,25 @@ layout(location = 2) in uint voxel_type;
 
 layout(location = 0) out vec3 vert_texel_coord;
 
+float get_layer_index() {
+    uint face_index = vertex_index / 6;
+
+    switch (voxel_type) {
+        case 1: switch (face_index) {
+            default: return 3.0;
+            case 3: return 0.0;
+            case 2: return 2.0;
+        }
+        case 2: return 1.0;
+        case 3: return 2.0;
+    }
+    return 0.0;
+}
+
 void main() {
     vertex_t vertex = cube_vertices[vertex_index];
     vec3 position = vertex_position + vertex.position;
 
     gl_Position = view_projection * vec4(position, 1.0);
-    vert_texel_coord = vec3(vertex.texel_coord, layer_indices[voxel_type]);
+    vert_texel_coord = vec3(vertex.texel_coord, get_layer_index());
 }
