@@ -2,7 +2,7 @@
 #include "camera.h"
 #include "gfx.h"
 #include "gfx/default.h"
-#include "gfx/render_pipeline_info.h"
+#include "gfx/render_pipeline.h"
 #include "gfx/gfx_util.h"
 #include "gfx/voxel_meshing_compute_pipeline.h"
 #include "util.h"
@@ -16,17 +16,9 @@
 #include <string.h>
 #include <stb/stb_image.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 #define NUM_VOXEL_TEXTURE_IMAGES 1
 #define NUM_VOXEL_TEXTURE_LAYERS 4
-
-static const char* voxel_layer_image_paths[NUM_VOXEL_TEXTURE_LAYERS] = {
-    "texture/cube_voxel_0.png",
-    "texture/cube_voxel_1.png",
-    "texture/cube_voxel_2.png",
-    "texture/cube_voxel_4.png"
-};
 
 static render_pipeline_render_info_t pipeline_info;
 static VkBuffer uniform_buffer;
@@ -42,6 +34,9 @@ typedef struct {
 
 static voxel_uniform_t* uniforms;
 static uint32_t uniform_stride;
+
+VkBuffer voxel_vertex_buffer;
+static VmaAllocation voxel_vertex_buffer_allocation;
 
 result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_device_properties) {
     result_t result;
@@ -70,10 +65,6 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
             }
         }
     };
-
-    VkImage texture_images[NUM_VOXEL_TEXTURE_IMAGES] = { image };
-    VmaAllocation texture_image_allocatios[NUM_VOXEL_TEXTURE_IMAGES] = { image_allocation };
-    VkImageView texture_image_views[NUM_VOXEL_TEXTURE_IMAGES] = { image_view };
 
     for (size_t i = 0; i < NUM_VOXEL_TEXTURE_IMAGES; i++) {
         uint32_t width;
@@ -106,7 +97,7 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
 
     staging_t image_stagings[NUM_VOXEL_TEXTURE_IMAGES];
 
-    if ((result = begin_images(NUM_VOXEL_TEXTURE_IMAGES, image_create_infos, image_stagings, texture_images, texture_image_allocatios)) != result_success) {
+    if ((result = begin_images(NUM_VOXEL_TEXTURE_IMAGES, image_create_infos, image_stagings, &image, &image_allocation)) != result_success) {
         return result;
     }
 
@@ -141,7 +132,7 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
         return result_command_buffer_begin_failure;
     }
 
-    transfer_images(transfer_command_buffer, NUM_VOXEL_TEXTURE_IMAGES, image_create_infos, image_stagings, texture_images);
+    transfer_images(transfer_command_buffer, NUM_VOXEL_TEXTURE_IMAGES, image_create_infos, image_stagings, &image);
 
     if (vkEndCommandBuffer(transfer_command_buffer) != VK_SUCCESS) {
         return result_command_buffer_end_failure;
@@ -164,13 +155,13 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
 
         if (vkCreateImageView(device, &(VkImageViewCreateInfo) {
             DEFAULT_VK_IMAGE_VIEW,
-            .image = texture_images[i],
+            .image = image,
             .viewType = image_create_info->arrayLayers == 1 ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY,
             .format = image_create_info->format,
             .subresourceRange.levelCount = image_create_info->mipLevels,
             .subresourceRange.layerCount = image_create_info->arrayLayers,
             .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
-        }, NULL, &texture_image_views[i]) != VK_SUCCESS) {
+        }, NULL, &image_view) != VK_SUCCESS) {
             return result_image_view_create_failure;
         }
     }
@@ -186,9 +177,29 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
         return result_buffer_create_failure;
     }
 
-    if (vmaMapMemory(allocator, uniform_buffer_allocation, (void*)uniforms) != VK_SUCCESS) {
+    if (vmaMapMemory(allocator, uniform_buffer_allocation, (void*) &uniforms) != VK_SUCCESS) {
         return result_memory_map_failure;
     }
+
+    vec3s vertex_position = (vec3s) {{ 0.0f, 0.0f, 0.0f }};
+
+    voxel_vertex_t vertices[6] = {
+        { vertex_position, 0, 0 },
+        { vertex_position, 1, 0 },
+        { vertex_position, 2, 0 },
+        { vertex_position, 3, 0 },
+        { vertex_position, 4, 0 },
+        { vertex_position, 5, 0 }
+    };
+
+    if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
+        DEFAULT_VK_VERTEX_BUFFER,
+        .size = sizeof(vertices)
+    }, &staging_allocation_create_info, &voxel_vertex_buffer, &voxel_vertex_buffer_allocation, NULL) != VK_SUCCESS) {
+        return result_buffer_create_failure;
+    }
+
+    write_to_buffer(voxel_vertex_buffer_allocation, sizeof(vertices), vertices);
     
     VkShaderModule vertex_shader_module;
     if ((result = create_shader_module("shader/voxel_vertex.spv", &vertex_shader_module)) != result_success) {
@@ -346,8 +357,11 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
 
     uniforms[0].view_projection = get_view_projection();
 
-    vkCmdBindVertexBuffers(command_buffer, 0, 1, NULL, (VkDeviceSize[1]) { 0 });
-    vkCmdDraw(command_buffer, NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE, 1, 0, 0);
+    // vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
+    // vkCmdDraw(command_buffer, NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE, 1, 0, 0);
+
+    vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
+    vkCmdDraw(command_buffer, 12, 1, 0, 0);
     
     return result_success;
 }

@@ -1,9 +1,7 @@
 #include "gfx.h"
 #include "chrono.h"
 #include "gfx/default.h"
-#include "gfx/voxel_generation_compute_pipeline.h"
 #include "gfx/voxel_render_pipeline.h"
-#include "gfx/voxel_meshing_compute_pipeline.h"
 #include "result.h"
 #include "util.h"
 #include <GLFW/glfw3.h>
@@ -174,7 +172,7 @@ static result_t get_physical_device(uint32_t num_physical_devices, const VkPhysi
         if (!features.samplerAnisotropy) {
             continue;
         }
-        
+
         if ((result = check_extensions(physical_device)) != result_success) {
             continue;
         }
@@ -658,6 +656,15 @@ static result_t init_vk_core(void) {
         return result_render_pass_create_failure;
     }
 
+    vkGetSwapchainImagesKHR(device, swapchain, &num_swapchain_images, NULL);
+    swapchain_images = malloc(num_swapchain_images*sizeof(VkImage));
+    swapchain_image_views = malloc(num_swapchain_images*sizeof(VkImageView));
+    swapchain_framebuffers = malloc(num_swapchain_images*sizeof(VkFramebuffer));
+
+    if ((result = init_swapchain_framebuffers()) != result_success) {
+        return result;
+    }
+
     if (vkCreateCommandPool(device, &(VkCommandPoolCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -679,25 +686,25 @@ static result_t init_vk_core(void) {
         return result_synchronization_primitive_create_failure;
     }
 
-    if ((result = init_voxel_render_pipeline()) != result_success) {
+    if ((result = init_voxel_render_pipeline(&physical_device_properties)) != result_success) {
         return result;
     }
 
-    if ((result = init_voxel_generation_compute_pipeline()) != result_success) {
-        return result;
-    }
+    // if ((result = init_voxel_generation_compute_pipeline()) != result_success) {
+    //     return result;
+    // }
 
-    if ((result = init_voxel_meshing_compute_pipeline()) != result_success) {
-        return result;
-    }
+    // if ((result = init_voxel_meshing_compute_pipeline()) != result_success) {
+    //     return result;
+    // }
 
-    if ((result = run_voxel_generation_compute_pipeline()) != result_success) {
-        return result;
-    }
+    // if ((result = run_voxel_generation_compute_pipeline()) != result_success) {
+    //     return result;
+    // }
 
-    if ((result = run_voxel_meshing_compute_pipeline()) != result_success) {
-        return result;
-    }
+    // if ((result = run_voxel_meshing_compute_pipeline()) != result_success) {
+    //     return result;
+    // }
 
     return result_success;
 }
@@ -705,8 +712,8 @@ static result_t init_vk_core(void) {
 static void term_vk_core(void) {
     vkDeviceWaitIdle(device);
     term_voxel_render_pipeline();
-    term_voxel_generation_compute_pipeline();
-    term_voxel_meshing_compute_pipeline();
+    // term_voxel_generation_compute_pipeline();
+    // term_voxel_meshing_compute_pipeline();
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
     vkDestroyCommandPool(device, frame_command_pool, NULL);
@@ -814,7 +821,7 @@ result_t draw_gfx(void) {
         }
     }, VK_SUBPASS_CONTENTS_INLINE);
 
-    if ((result = draw_voxel_render_pipeline(command_encoder, surface_texture_view, depth_texture_view)) != result_success) {
+    if ((result = draw_voxel_render_pipeline(command_buffer)) != result_success) {
         return result;
     }
 

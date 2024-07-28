@@ -79,8 +79,7 @@ extern const VmaAllocationCreateInfo device_allocation_create_info;
 
 #define DEFAULT_VK_UNIFORM_BUFFER\
     DEFAULT_VK_BUFFER,\
-    .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,\
-    .flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
 
 #define DEFAULT_VMA_ALLOCATION\
     .usage = VMA_MEMORY_USAGE_AUTO
