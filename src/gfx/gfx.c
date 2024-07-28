@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -48,9 +48,9 @@ static VkExtent2D swap_image_extent;
 static VkQueue presentation_queue;
 static bool framebuffer_resized;
 
-static VkSampleCountFlagBits render_multisample_flags;
+VkSampleCountFlagBits render_multisample_flags;
 
-static VkRenderPass frame_render_pass;
+VkRenderPass frame_render_pass;
 static VkCommandPool frame_command_pool;
 static VkCommandBuffer frame_command_buffers[NUM_FRAMES_IN_FLIGHT];
 
@@ -64,6 +64,10 @@ static VkImage depth_image;
 static VmaAllocation depth_image_allocation;
 static VkImageView depth_image_view;
 VkFormat depth_image_format;
+
+VkCommandPool transfer_command_pool;
+VkCommandBuffer transfer_command_buffer;
+VkFence transfer_fence;
 
 static const char* layers[] = {
     "VK_LAYER_KHRONOS_validation"
@@ -652,6 +656,27 @@ static result_t init_vk_core(void) {
         }
     }, NULL, &frame_render_pass) != VK_SUCCESS) {
         return result_render_pass_create_failure;
+    }
+
+    if (vkCreateCommandPool(device, &(VkCommandPoolCreateInfo) {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = queue_family_indices.graphics
+    }, NULL, &transfer_command_pool) != VK_SUCCESS) {
+        return result_command_pool_create_failure;
+    }
+
+    if (vkAllocateCommandBuffers(device, &(VkCommandBufferAllocateInfo) {
+        DEFAULT_VK_COMMAND_BUFFER,
+        .commandPool = transfer_command_pool
+    }, &transfer_command_buffer) != VK_SUCCESS) {
+        return result_command_buffers_allocate_failure;
+    }
+
+    if (vkCreateFence(device, &(VkFenceCreateInfo) {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+    }, NULL, &transfer_fence) != VK_SUCCESS) {
+        return result_synchronization_primitive_create_failure;
     }
 
     if ((result = init_voxel_render_pipeline()) != result_success) {
