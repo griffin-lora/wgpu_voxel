@@ -37,6 +37,36 @@ result_t init_voxel_generation_compute_pipeline(void) {
         return result_image_view_create_failure;
     }
 
+
+    vkResetFences(device, 1, &transfer_fence);
+    vkResetCommandBuffer(transfer_command_buffer, 0);
+
+    if (vkBeginCommandBuffer(transfer_command_buffer, &(VkCommandBufferBeginInfo) {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    }) != VK_SUCCESS) {
+        return result_command_buffer_begin_failure;
+    }
+
+    vkCmdPipelineBarrier(transfer_command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
+        DEFAULT_VK_IMAGE_MEMORY_BARRIER,
+        .image = voxel_image,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT
+    });
+
+    if (vkEndCommandBuffer(transfer_command_buffer) != VK_SUCCESS) {
+        return result_command_buffer_end_failure;
+    }
+
+    vkQueueSubmit(queue, 1, &(VkSubmitInfo) {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &transfer_command_buffer
+    }, transfer_fence);
+
+    vkWaitForFences(device, 1, &transfer_fence, VK_TRUE, UINT64_MAX);
+
     VkShaderModule shader_module;
     if ((result = create_shader_module("shader/voxel_generation.spv", &shader_module)) != result_success) {
         return result;
