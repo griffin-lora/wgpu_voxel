@@ -1,13 +1,15 @@
 #pragma once
 #include "result.h"
 #include <GLFW/glfw3.h>
-#include <dawn/webgpu.h>
+#include <vulkan/vulkan_core.h>
+#include <vk_mem_alloc.h>
 
 extern GLFWwindow* window;
-extern WGPUDevice device;
-extern WGPUQueue queue;
-extern WGPUSupportedLimits device_limits;
-extern WGPUTextureFormat surface_format;
+extern VkDevice device;
+extern VmaAllocator allocator;
+extern VkQueue queue;
+extern VkSurfaceFormatKHR surface_format;
+extern VkFormat depth_image_format;
 
 result_t init_gfx(void);
 result_t draw_gfx(void);

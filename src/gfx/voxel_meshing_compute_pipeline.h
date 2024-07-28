@@ -1,7 +1,6 @@
 #pragma once
 #include "result.h"
 #include <cglm/types-struct.h>
-#include <dawn/webgpu.h>
 #include <stdalign.h>
 #include <assert.h>
 #include <stdint.h>

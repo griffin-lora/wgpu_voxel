@@ -6,7 +6,6 @@
 #include "result.h"
 #include "voxel.h"
 #include <cglm/types-struct.h>
-#include <dawn/webgpu.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

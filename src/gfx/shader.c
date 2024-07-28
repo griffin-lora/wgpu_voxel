@@ -1,7 +1,6 @@
 #include "shader.h"
 #include "gfx/gfx.h"
 #include "result.h"
-#include <dawn/webgpu.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stb/stb_image.h>

@@ -1,6 +1,5 @@
 #pragma once
 #include "result.h"
-#include <dawn/webgpu.h>
 
 extern WGPUTextureView voxel_texture_view;
 

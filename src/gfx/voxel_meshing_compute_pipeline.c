@@ -4,7 +4,6 @@
 #include "gfx/voxel_generation_compute_pipeline.h"
 #include "result.h"
 #include "voxel.h"
-#include <dawn/webgpu.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
