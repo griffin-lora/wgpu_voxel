@@ -22,7 +22,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
         .imageType = VK_IMAGE_TYPE_3D,
         .format = VK_FORMAT_R32_UINT,
         .extent = { VOXEL_REGION_SIZE, VOXEL_REGION_SIZE, VOXEL_REGION_SIZE },
-        .usage = VK_IMAGE_USAGE_STORAGE_BIT /*| VK_IMAGE_USAGE_SAMPLED_BIT*/
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
     }, &device_allocation_create_info, &voxel_image, &voxel_image_allocation, NULL) != VK_SUCCESS) {
         return result_image_create_failure;
     }
@@ -36,36 +36,6 @@ result_t init_voxel_generation_compute_pipeline(void) {
     }, NULL, &voxel_image_view) != VK_SUCCESS) {
         return result_image_view_create_failure;
     }
-
-
-    vkResetFences(device, 1, &transfer_fence);
-    vkResetCommandBuffer(transfer_command_buffer, 0);
-
-    if (vkBeginCommandBuffer(transfer_command_buffer, &(VkCommandBufferBeginInfo) {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-    }) != VK_SUCCESS) {
-        return result_command_buffer_begin_failure;
-    }
-
-    vkCmdPipelineBarrier(transfer_command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
-        DEFAULT_VK_IMAGE_MEMORY_BARRIER,
-        .image = voxel_image,
-        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT
-    });
-
-    if (vkEndCommandBuffer(transfer_command_buffer) != VK_SUCCESS) {
-        return result_command_buffer_end_failure;
-    }
-
-    vkQueueSubmit(queue, 1, &(VkSubmitInfo) {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &transfer_command_buffer
-    }, transfer_fence);
-
-    vkWaitForFences(device, 1, &transfer_fence, VK_TRUE, UINT64_MAX);
 
     VkShaderModule shader_module;
     if ((result = create_shader_module("shader/voxel_generation.spv", &shader_module)) != result_success) {
@@ -115,7 +85,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
         },
         .layout = pipeline.pipeline_layout
     }, NULL, &pipeline.pipeline) != VK_SUCCESS) {
-        return result_graphics_pipelines_create_failure;
+        return result_compute_pipelines_create_failure;
     }
 
     vkDestroyShaderModule(device, shader_module, NULL);
@@ -136,6 +106,12 @@ result_t run_voxel_generation_compute_pipeline(void) {
         return result_command_buffer_begin_failure;
     }
 
+    vkCmdPipelineBarrier(transfer_command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
+        DEFAULT_VK_IMAGE_MEMORY_BARRIER,
+        .image = voxel_image,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
+    });
     vkCmdBindPipeline(transfer_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
     vkCmdBindDescriptorSets(transfer_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
 

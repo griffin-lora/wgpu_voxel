@@ -1,6 +1,8 @@
 #include "voxel_meshing_compute_pipeline.h"
+#include "gfx/default.h"
 #include "gfx/gfx.h"
-#include "gfx/shader.h"
+#include "gfx/gfx_util.h"
+#include "gfx/pipeline.h"
 #include "gfx/voxel_generation_compute_pipeline.h"
 #include "result.h"
 #include "voxel.h"
@@ -8,209 +10,151 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vulkan/vulkan_core.h>
 
-static WGPUComputePipeline pipeline;
-static WGPUBindGroup bind_group;
-static WGPUBuffer voxel_vertex_count_buffer;
-WGPUBuffer voxel_vertex_buffer;
-static WGPUQuerySet timestamp_query_set;
-static WGPUBuffer timestamp_resolve_buffer;
-static WGPUBuffer timestamp_read_buffer;
-
-static void timestamp_buffer_map_callback(WGPUMapAsyncStatus status, const char* msg, void*, void*) {
-    if (status != WGPUMapAsyncStatus_Success) {
-        printf("Failed to map buffer with message: %s\n", msg);
-        exit(1);
-    }
-
-    const uint64_t* timestamps = wgpuBufferGetConstMappedRange(timestamp_read_buffer, 0, 2 * sizeof(uint64_t));
-
-    printf("Meshing took: %ld nanoseconds\n", timestamps[1] - timestamps[0]);
-
-    wgpuBufferUnmap(timestamp_read_buffer);
-}
+static pipeline_t pipeline;
+static VkBuffer voxel_vertex_count_buffer;
+static VmaAllocation voxel_vertex_count_buffer_allocation;
+VkBuffer voxel_vertex_buffer;
+static VmaAllocation voxel_vertex_buffer_allocation;
 
 result_t init_voxel_meshing_compute_pipeline(void) {
     result_t result;
 
-    WGPUShaderModule shader_module;
+    if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
+        DEFAULT_VK_BUFFER,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .size = sizeof(uint32_t)
+    }, &staging_allocation_create_info, &voxel_vertex_count_buffer, &voxel_vertex_count_buffer_allocation, NULL) != VK_SUCCESS) {
+        return result_buffer_create_failure;
+    }
+
+    if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
+        DEFAULT_VK_BUFFER,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .size = NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * sizeof(voxel_vertex_t)
+    }, &staging_allocation_create_info, &voxel_vertex_buffer, &voxel_vertex_buffer_allocation, NULL) != VK_SUCCESS) {
+        return result_buffer_create_failure;
+    }
+
+    VkShaderModule shader_module;
     if ((result = create_shader_module("shader/voxel_meshing.spv", &shader_module)) != result_success) {
         return result;
     }
 
-    WGPUBindGroupLayout bind_group_layout = wgpuDeviceCreateBindGroupLayout(device, &(WGPUBindGroupLayoutDescriptor) {
-        .entryCount = 3,
-        .entries = (WGPUBindGroupLayoutEntry[3]) {
-            {
-                .binding = 0,
-                .visibility = WGPUShaderStage_Compute,
-                .texture = {
-                    .sampleType = WGPUTextureSampleType_Uint,
-                    .viewDimension = WGPUTextureViewDimension_3D
-                }
-            },
-            {
-                .binding = 1,
-                .visibility = WGPUShaderStage_Compute,
-                .buffer = {
-                    .type = WGPUBufferBindingType_Storage
-                }
-            },
-            {
-                .binding = 2,
-                .visibility = WGPUShaderStage_Compute,
-                .buffer = {
-                    .type = WGPUBufferBindingType_Storage
+    if ((result = create_descriptor_set(
+        &(VkDescriptorSetLayoutCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            
+            .bindingCount = 3,
+            .pBindings = (VkDescriptorSetLayoutBinding[3]) {
+                {
+                    DEFAULT_VK_DESCRIPTOR_BINDING,
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
+                },
+                {
+                    DEFAULT_VK_DESCRIPTOR_BINDING,
+                    .binding = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
+                },
+                {
+                    DEFAULT_VK_DESCRIPTOR_BINDING,
+                    .binding = 2,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
                 }
             }
-        }
-    });
-    if (bind_group_layout == NULL) {
-        return result_bind_group_layout_create_failure;
+        },
+        (descriptor_info_t[3]) {
+            {
+                .type = descriptor_info_type_image,
+                .image = {
+                    .imageView = voxel_image_view,
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL
+                }
+            },
+            {
+                .type = descriptor_info_type_buffer,
+                .buffer = {
+                    .buffer = voxel_vertex_count_buffer,
+                    .range = sizeof(uint32_t)
+                }
+            },
+            {
+                .type = descriptor_info_type_buffer,
+                .buffer = {
+                    .buffer = voxel_vertex_buffer,
+                    .range = NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * sizeof(voxel_vertex_t)
+                }
+            }
+        },
+        &pipeline.descriptor_set_layout, &pipeline.descriptor_pool, &pipeline.descriptor_set
+    )) != result_success) {
+        return result;
     }
 
-    WGPUPipelineLayout pipeline_layout = wgpuDeviceCreatePipelineLayout(device, &(WGPUPipelineLayoutDescriptor) {
-        .bindGroupLayoutCount = 1,
-        .bindGroupLayouts = &bind_group_layout
-    });
-    if (pipeline_layout == NULL) {
+    if (vkCreatePipelineLayout(device, &(VkPipelineLayoutCreateInfo) {
+        DEFAULT_VK_PIPELINE_LAYOUT,
+        .pSetLayouts = &pipeline.descriptor_set_layout
+    }, NULL, &pipeline.pipeline_layout) != VK_SUCCESS) {
         return result_pipeline_layout_create_failure;
     }
-    
-    if ((pipeline = wgpuDeviceCreateComputePipeline(device, &(WGPUComputePipelineDescriptor) {
-        .compute = {
-            .entryPoint = "main",
+
+    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &(VkComputePipelineCreateInfo) {
+        DEFAULT_VK_COMPUTE_PIPELINE,
+        .stage = {
+            DEFAULT_VK_SHADER_STAGE,
+            .stage = VK_SHADER_STAGE_COMPUTE_BIT,
             .module = shader_module
         },
-        .layout = pipeline_layout
-    })) == NULL) {
-        return result_compute_pipeline_create_failure;
+        .layout = pipeline.pipeline_layout
+    }, NULL, &pipeline.pipeline) != VK_SUCCESS) {
+        return result_compute_pipelines_create_failure;
     }
 
-    wgpuBindGroupLayoutRelease(bind_group_layout);
-    wgpuPipelineLayoutRelease(pipeline_layout);
-
-    if ((voxel_vertex_count_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_Storage,
-        .size = sizeof(uint32_t),
-        .mappedAtCreation = false
-    })) == NULL) {
-        return result_buffer_create_failure;
-    }
-
-    if ((voxel_vertex_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .usage = WGPUBufferUsage_Storage | WGPUBufferUsage_Vertex,
-        .size = NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * sizeof(voxel_vertex_t)
-    })) == NULL) {
-        return result_buffer_create_failure;
-    }
-
-    if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
-        .layout = bind_group_layout,
-        .entryCount = 3,
-        .entries = (WGPUBindGroupEntry[3]) {
-            {
-                .binding = 0,
-                .textureView = voxel_texture_view
-            },
-            {
-                .binding = 1,
-                .buffer = voxel_vertex_count_buffer,
-                .offset = 0,
-                .size = sizeof(uint32_t)
-            },
-            {
-                .binding = 2,
-                .buffer = voxel_vertex_buffer,
-                .offset = 0,
-                .size = NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * sizeof(voxel_vertex_t)
-            }
-        }
-    })) == NULL) {
-        return result_bind_group_create_failure;
-    }
-
-    if ((timestamp_query_set = wgpuDeviceCreateQuerySet(device, &(WGPUQuerySetDescriptor) {
-        .type = WGPUQueryType_Timestamp,
-        .count = 2
-    })) == NULL) {
-        return result_query_set_create_failure;
-    }
-
-    if ((timestamp_resolve_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .size = 2 * sizeof(uint64_t),
-        .usage = WGPUBufferUsage_QueryResolve | WGPUBufferUsage_CopySrc,
-        .mappedAtCreation = false
-    })) == NULL) {
-        return result_buffer_create_failure;
-    }
-
-    if ((timestamp_read_buffer = wgpuDeviceCreateBuffer(device, &(WGPUBufferDescriptor) {
-        .size = 2 * sizeof(uint64_t),
-        .usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst,
-        .mappedAtCreation = false
-    })) == NULL) {
-        return result_buffer_create_failure;
-    }
+    vkDestroyShaderModule(device, shader_module, NULL);
 
     return result_success;
 }
 
 result_t run_voxel_meshing_compute_pipeline(void) {
-    wgpuDeviceTick(device); // TODO: Implement proper memory barrier here
+    // TODO: Use seperate command buffer from transfer command buffer??
 
-    WGPUCommandEncoder command_encoder = wgpuDeviceCreateCommandEncoder(device, &(WGPUCommandEncoderDescriptor) {});
-    if (command_encoder == NULL) {
-        return result_command_encoder_create_failure;
+    vkResetFences(device, 1, &transfer_fence);
+    vkResetCommandBuffer(transfer_command_buffer, 0);
+
+    if (vkBeginCommandBuffer(transfer_command_buffer, &(VkCommandBufferBeginInfo) {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    }) != VK_SUCCESS) {
+        return result_command_buffer_begin_failure;
     }
 
-    WGPUComputePassEncoder compute_pass_encoder = wgpuCommandEncoderBeginComputePass(command_encoder, &(WGPUComputePassDescriptor) {
-        .timestampWrites = &(WGPUComputePassTimestampWrites) {
-            .beginningOfPassWriteIndex = 0,
-            .endOfPassWriteIndex = 1,
-            .querySet = timestamp_query_set
-        }
-    });
-    if (compute_pass_encoder == NULL) {
-        return result_compute_pass_encoder_create_failure;
+    vkCmdBindPipeline(transfer_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+    vkCmdBindDescriptorSets(transfer_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
+
+    vkCmdDispatch(transfer_command_buffer, 8, 8, 8);
+
+    if (vkEndCommandBuffer(transfer_command_buffer) != VK_SUCCESS) {
+        return result_command_buffer_end_failure;
     }
 
-    wgpuComputePassEncoderSetPipeline(compute_pass_encoder, pipeline);
-    wgpuComputePassEncoderSetBindGroup(compute_pass_encoder, 0, bind_group, 0, NULL);
-    wgpuComputePassEncoderDispatchWorkgroups(compute_pass_encoder, 8, 8, 8);
+    vkQueueSubmit(queue, 1, &(VkSubmitInfo) {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &transfer_command_buffer
+    }, transfer_fence);
 
-    wgpuComputePassEncoderEnd(compute_pass_encoder);
-    wgpuComputePassEncoderRelease(compute_pass_encoder);
-
-    wgpuCommandEncoderResolveQuerySet(command_encoder, timestamp_query_set, 0, 2, timestamp_resolve_buffer, 0);
-    wgpuCommandEncoderCopyBufferToBuffer(command_encoder, timestamp_resolve_buffer, 0, timestamp_read_buffer, 0, 2 * sizeof(uint64_t));
-
-    WGPUCommandBuffer command = wgpuCommandEncoderFinish(command_encoder, &(WGPUCommandBufferDescriptor) {});
-    if (command == NULL) {
-        return result_command_encoder_finish_failure;
-    }
-
-    wgpuQueueSubmit(queue, 1, &command);
-
-    wgpuCommandBufferRelease(command);
-    wgpuCommandEncoderRelease(command_encoder);
-
-    wgpuDeviceTick(device); // TODO: Implement proper memory barrier here
+    vkWaitForFences(device, 1, &transfer_fence, VK_TRUE, UINT64_MAX);
 
     return result_success;
 }
 
 void term_voxel_meshing_compute_pipeline(void) {
-    wgpuBufferMapAsync2(timestamp_read_buffer, WGPUMapMode_Read, 0, 2 * sizeof(uint64_t), (WGPUBufferMapCallbackInfo2) {
-        .mode = WGPUCallbackMode_AllowSpontaneous,
-        .callback = timestamp_buffer_map_callback
-    });
-
-    wgpuComputePipelineRelease(pipeline);
-    wgpuBindGroupRelease(bind_group);
-    wgpuBufferRelease(voxel_vertex_count_buffer);
-    wgpuBufferRelease(voxel_vertex_buffer);
-    wgpuQuerySetRelease(timestamp_query_set);
-    wgpuBufferRelease(timestamp_resolve_buffer);
-    wgpuBufferRelease(timestamp_read_buffer);
+    destroy_pipeline(&pipeline);
+    vmaDestroyBuffer(allocator, voxel_vertex_count_buffer, voxel_vertex_count_buffer_allocation);
+    vmaDestroyBuffer(allocator, voxel_vertex_buffer, voxel_vertex_buffer_allocation);
 }

@@ -7,6 +7,7 @@
 #include "gfx/voxel_meshing_compute_pipeline.h"
 #include "util.h"
 #include "result.h"
+#include "voxel.h"
 #include <cglm/types-struct.h>
 #include <math.h>
 #include <stdint.h>
@@ -33,9 +34,6 @@ typedef struct {
 
 static voxel_uniform_t* uniforms;
 static uint32_t uniform_stride;
-
-VkBuffer voxel_vertex_buffer;
-static VmaAllocation voxel_vertex_buffer_allocation;
 
 result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_device_properties) {
     result_t result;
@@ -179,26 +177,6 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
     if (vmaMapMemory(allocator, uniform_buffer_allocation, (void*) &uniforms) != VK_SUCCESS) {
         return result_memory_map_failure;
     }
-
-    vec3s vertex_position = (vec3s) {{ 0.0f, 0.0f, 0.0f }};
-
-    voxel_vertex_t vertices[6] = {
-        { vertex_position, 0, 0 },
-        { vertex_position, 1, 0 },
-        { vertex_position, 2, 0 },
-        { vertex_position, 3, 0 },
-        { vertex_position, 4, 0 },
-        { vertex_position, 5, 0 }
-    };
-
-    if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
-        DEFAULT_VK_VERTEX_BUFFER,
-        .size = sizeof(vertices)
-    }, &staging_allocation_create_info, &voxel_vertex_buffer, &voxel_vertex_buffer_allocation, NULL) != VK_SUCCESS) {
-        return result_buffer_create_failure;
-    }
-
-    write_to_buffer(voxel_vertex_buffer_allocation, sizeof(vertices), vertices);
     
     VkShaderModule vertex_shader_module;
     if ((result = create_shader_module("shader/voxel_vertex.spv", &vertex_shader_module)) != result_success) {
@@ -333,12 +311,9 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
 
     uniforms[0].view_projection = get_view_projection();
 
-    // vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
-    // vkCmdDraw(command_buffer, NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE, 1, 0, 0);
-
     vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
-    vkCmdDraw(command_buffer, 12, 1, 0, 0);
-    
+    vkCmdDraw(command_buffer, NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE, 1, 0, 0);
+
     return result_success;
 }
 
@@ -349,6 +324,5 @@ void term_voxel_render_pipeline() {
     vmaDestroyImage(allocator, image, image_allocation);
     vkDestroySampler(device, sampler, NULL);
     vmaDestroyBuffer(allocator, uniform_buffer, uniform_buffer_allocation);
-    vmaDestroyBuffer(allocator, voxel_vertex_buffer, voxel_vertex_buffer_allocation);
     destroy_pipeline(&pipeline);
 }

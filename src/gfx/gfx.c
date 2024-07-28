@@ -2,6 +2,7 @@
 #include "chrono.h"
 #include "gfx/default.h"
 #include "gfx/voxel_generation_compute_pipeline.h"
+#include "gfx/voxel_meshing_compute_pipeline.h"
 #include "gfx/voxel_render_pipeline.h"
 #include "result.h"
 #include "util.h"
@@ -696,17 +697,17 @@ static result_t init_vk_core(void) {
         return result;
     }
 
-    // if ((result = init_voxel_meshing_compute_pipeline()) != result_success) {
-    //     return result;
-    // }
+    if ((result = init_voxel_meshing_compute_pipeline()) != result_success) {
+        return result;
+    }
 
     if ((result = run_voxel_generation_compute_pipeline()) != result_success) {
         return result;
     }
 
-    // if ((result = run_voxel_meshing_compute_pipeline()) != result_success) {
-    //     return result;
-    // }
+    if ((result = run_voxel_meshing_compute_pipeline()) != result_success) {
+        return result;
+    }
 
     return result_success;
 }
@@ -715,7 +716,7 @@ static void term_vk_core(void) {
     vkDeviceWaitIdle(device);
     term_voxel_render_pipeline();
     term_voxel_generation_compute_pipeline();
-    // term_voxel_meshing_compute_pipeline();
+    term_voxel_meshing_compute_pipeline();
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
     vkDestroyCommandPool(device, frame_command_pool, NULL);
