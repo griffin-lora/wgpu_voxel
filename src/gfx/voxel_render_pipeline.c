@@ -373,5 +373,6 @@ void term_voxel_render_pipeline() {
     vmaDestroyImage(allocator, image, image_allocation);
     vkDestroySampler(device, sampler, NULL);
     vmaDestroyBuffer(allocator, uniform_buffer, uniform_buffer_allocation);
+    vmaDestroyBuffer(allocator, voxel_vertex_buffer, voxel_vertex_buffer_allocation);
     destroy_render_pipeline(&pipeline_info);
 }

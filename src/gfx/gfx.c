@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -717,6 +718,9 @@ static void term_vk_core(void) {
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
     vkDestroyCommandPool(device, frame_command_pool, NULL);
+
+    vkDestroyCommandPool(device, transfer_command_pool, NULL);
+    vkDestroyFence(device, transfer_fence, NULL);
 
     term_swapchain_dependents();
     
