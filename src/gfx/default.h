@@ -65,6 +65,9 @@ extern const VmaAllocationCreateInfo device_allocation_create_info;
     .basePipelineHandle = VK_NULL_HANDLE,\
     .basePipelineIndex = -1
 
+#define DEFAULT_VK_COMPUTE_PIPELINE\
+    .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO
+
 #define DEFAULT_VK_BUFFER\
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,\
     .sharingMode = VK_SHARING_MODE_EXCLUSIVE

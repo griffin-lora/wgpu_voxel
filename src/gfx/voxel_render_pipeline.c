@@ -2,12 +2,11 @@
 #include "camera.h"
 #include "gfx.h"
 #include "gfx/default.h"
-#include "gfx/render_pipeline.h"
+#include "gfx/pipeline.h"
 #include "gfx/gfx_util.h"
 #include "gfx/voxel_meshing_compute_pipeline.h"
 #include "util.h"
 #include "result.h"
-#include "voxel.h"
 #include <cglm/types-struct.h>
 #include <math.h>
 #include <stdint.h>
@@ -20,7 +19,7 @@
 #define NUM_VOXEL_TEXTURE_IMAGES 1
 #define NUM_VOXEL_TEXTURE_LAYERS 4
 
-static render_pipeline_render_info_t pipeline_info;
+static pipeline_t pipeline;
 static VkBuffer uniform_buffer;
 static VmaAllocation uniform_buffer_allocation;
 static VkSampler sampler;
@@ -248,15 +247,15 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
                 }
             }
         },
-        &pipeline_info.descriptor_set_layout, &pipeline_info.descriptor_pool, &pipeline_info.descriptor_set
+        &pipeline.descriptor_set_layout, &pipeline.descriptor_pool, &pipeline.descriptor_set
     )) != result_success) {
         return result;
     }
     
     if (vkCreatePipelineLayout(device, &(VkPipelineLayoutCreateInfo) {
         DEFAULT_VK_PIPELINE_LAYOUT,
-        .pSetLayouts = &pipeline_info.descriptor_set_layout
-    }, NULL, &pipeline_info.pipeline_layout) != VK_SUCCESS) {
+        .pSetLayouts = &pipeline.descriptor_set_layout
+    }, NULL, &pipeline.pipeline_layout) != VK_SUCCESS) {
         return result_pipeline_layout_create_failure;
     }
 
@@ -316,44 +315,21 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
             DEFAULT_VK_MULTISAMPLE,
             .rasterizationSamples = render_multisample_flags
         },
-        .layout = pipeline_info.pipeline_layout,
+        .layout = pipeline.pipeline_layout,
         .renderPass = frame_render_pass
-    }, NULL, &pipeline_info.pipeline) != VK_SUCCESS) {
+    }, NULL, &pipeline.pipeline) != VK_SUCCESS) {
         return result_graphics_pipelines_create_failure;
     }
 
     vkDestroyShaderModule(device, vertex_shader_module, NULL);
     vkDestroyShaderModule(device, fragment_shader_module, NULL);
-    
-    // if ((bind_group = wgpuDeviceCreateBindGroup(device, &(WGPUBindGroupDescriptor) {
-    //     .layout = bind_group_layout,
-    //     .entryCount = 3,
-    //     .entries = (WGPUBindGroupEntry[3]) {
-    //         {
-    //             .binding = 0,
-    //             .buffer = uniform_buffer,
-    //             .offset = 0,
-    //             .size = sizeof(*uniforms)
-    //         },
-    //         {
-    //             .binding = 1,
-    //             .textureView = texture_view
-    //         },
-    //         {
-    //             .binding = 2,
-    //             .sampler = sampler
-    //         }
-    //     }
-    // })) == NULL) {
-    //     return result_bind_group_create_failure;
-    // }
 
     return result_success;
 }
 
 result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_info.pipeline);
-    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_info.pipeline_layout, 0, 1, &pipeline_info.descriptor_set, 0, NULL);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
 
     uniforms[0].view_projection = get_view_projection();
 
@@ -374,5 +350,5 @@ void term_voxel_render_pipeline() {
     vkDestroySampler(device, sampler, NULL);
     vmaDestroyBuffer(allocator, uniform_buffer, uniform_buffer_allocation);
     vmaDestroyBuffer(allocator, voxel_vertex_buffer, voxel_vertex_buffer_allocation);
-    destroy_render_pipeline(&pipeline_info);
+    destroy_pipeline(&pipeline);
 }

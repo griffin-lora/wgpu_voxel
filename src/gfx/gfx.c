@@ -1,6 +1,7 @@
 #include "gfx.h"
 #include "chrono.h"
 #include "gfx/default.h"
+#include "gfx/voxel_generation_compute_pipeline.h"
 #include "gfx/voxel_render_pipeline.h"
 #include "result.h"
 #include "util.h"
@@ -126,7 +127,7 @@ static result_t check_extensions(VkPhysicalDevice physical_device) {
 
 static uint32_t get_graphics_queue_family_index(uint32_t num_queue_families, const VkQueueFamilyProperties queue_families[]) {
     for (uint32_t i = 0; i < num_queue_families; i++) {
-        if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+        if ((queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT)) {
             return i;
         }
     }
@@ -691,17 +692,17 @@ static result_t init_vk_core(void) {
         return result;
     }
 
-    // if ((result = init_voxel_generation_compute_pipeline()) != result_success) {
-    //     return result;
-    // }
+    if ((result = init_voxel_generation_compute_pipeline()) != result_success) {
+        return result;
+    }
 
     // if ((result = init_voxel_meshing_compute_pipeline()) != result_success) {
     //     return result;
     // }
 
-    // if ((result = run_voxel_generation_compute_pipeline()) != result_success) {
-    //     return result;
-    // }
+    if ((result = run_voxel_generation_compute_pipeline()) != result_success) {
+        return result;
+    }
 
     // if ((result = run_voxel_meshing_compute_pipeline()) != result_success) {
     //     return result;
@@ -713,7 +714,7 @@ static result_t init_vk_core(void) {
 static void term_vk_core(void) {
     vkDeviceWaitIdle(device);
     term_voxel_render_pipeline();
-    // term_voxel_generation_compute_pipeline();
+    term_voxel_generation_compute_pipeline();
     // term_voxel_meshing_compute_pipeline();
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);

@@ -7,6 +7,6 @@ typedef struct {
     VkDescriptorSet descriptor_set;
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
-} render_pipeline_render_info_t;
+} pipeline_t;
 
-void destroy_render_pipeline(const render_pipeline_render_info_t* info);
+void destroy_pipeline(const pipeline_t* pipeline);
