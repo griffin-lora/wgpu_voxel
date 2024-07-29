@@ -65,7 +65,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
 
     if ((result = create_image(command_buffer, command_fence, &(VkImageCreateInfo) {
         DEFAULT_VK_SAMPLED_IMAGE,
-        .format = VK_FORMAT_R8G8B8_SRGB,
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
         .extent = { texture_size, texture_size, 1 },
         .mipLevels = num_mip_levels,
         .arrayLayers = NUM_VOXEL_TEXTURE_LAYERS
@@ -81,7 +81,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         DEFAULT_VK_IMAGE_VIEW,
         .image = image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
-        .format = VK_FORMAT_R8G8B8_SRGB,
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
         .subresourceRange = {
             .levelCount = num_mip_levels,
             .layerCount = NUM_VOXEL_TEXTURE_LAYERS,
