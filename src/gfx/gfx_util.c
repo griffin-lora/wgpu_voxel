@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <malloc.h>
+#include <vulkan/vulkan_core.h>
 
 result_t create_shader_module(const char* path, VkShaderModule* shader_module) {
     if (access(path, F_OK) != 0) {
@@ -347,6 +348,34 @@ result_t begin_buffer(
 
     if ((result = write_to_buffer(staging->allocation, num_array_bytes, array)) != result_success) {
         return result;
+    }
+
+    return result_success;
+}
+
+result_t reset_command_processing(VkCommandBuffer command_buffer, VkFence command_fence) {
+    if (vkResetFences(device, 1, &command_fence) != VK_SUCCESS) {
+        return result_fences_reset_failure;
+    }
+
+    if (vkResetCommandBuffer(command_buffer, 0) != VK_SUCCESS) {
+        return result_command_buffer_reset_failure;
+    }
+    
+    return result_success;
+}
+
+result_t submit_and_wait(VkCommandBuffer command_buffer, VkFence command_fence) {
+    if (vkQueueSubmit(queue, 1, &(VkSubmitInfo) {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &command_buffer
+    }, command_fence) != VK_SUCCESS) {
+        return result_queue_submit_failure;
+    }
+
+    if (vkWaitForFences(device, 1, &command_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
+        return result_fences_wait_failure;
     }
 
     return result_success;

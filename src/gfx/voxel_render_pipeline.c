@@ -35,7 +35,7 @@ typedef struct {
 static voxel_uniform_t* uniforms;
 static uint32_t uniform_stride;
 
-result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_device_properties) {
+result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence command_fence, const VkPhysicalDeviceProperties* physical_device_properties) {
     result_t result;
 
     struct {
@@ -119,29 +119,25 @@ result_t init_voxel_render_pipeline(const VkPhysicalDeviceProperties* physical_d
         return result_sampler_create_failure;
     }
 
-    vkResetFences(device, 1, &transfer_fence);
-    vkResetCommandBuffer(transfer_command_buffer, 0);
-
-    if (vkBeginCommandBuffer(transfer_command_buffer, &(VkCommandBufferBeginInfo) {
+    if (vkBeginCommandBuffer(command_buffer, &(VkCommandBufferBeginInfo) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
     }) != VK_SUCCESS) {
         return result_command_buffer_begin_failure;
     }
 
-    transfer_images(transfer_command_buffer, NUM_VOXEL_TEXTURE_IMAGES, image_create_infos, image_stagings, &image);
+    transfer_images(command_buffer, NUM_VOXEL_TEXTURE_IMAGES, image_create_infos, image_stagings, &image);
 
-    if (vkEndCommandBuffer(transfer_command_buffer) != VK_SUCCESS) {
+    if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
         return result_command_buffer_end_failure;
     }
 
-    vkQueueSubmit(queue, 1, &(VkSubmitInfo) {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &transfer_command_buffer
-    }, transfer_fence);
-
-    vkWaitForFences(device, 1, &transfer_fence, VK_TRUE, UINT64_MAX);
+    if ((result = submit_and_wait(command_buffer, command_fence)) != result_success) {
+        return result;
+    }
+    if ((result = reset_command_processing(command_buffer, command_fence)) != result_success) {
+        return result;
+    }
 
     end_images(NUM_VOXEL_TEXTURE_IMAGES, image_stagings);
 

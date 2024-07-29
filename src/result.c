@@ -37,6 +37,8 @@ static const char* get_result_string(result_t result) {
         case result_swapchain_image_present_failure: return "Failed to present swap chain image";
         case result_memory_map_failure: return "Failed to map buffer memory";
         case result_fences_wait_failure: return "Faled to wait for fences";
+        case result_fences_reset_failure: return "Failed to reset fences";
+        case result_command_buffer_reset_failure: return "Failed to command buffer";
 
         case result_image_pixels_load_failure: return "Failed to load image pixels";
 

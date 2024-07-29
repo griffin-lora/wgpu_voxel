@@ -120,35 +120,22 @@ result_t init_voxel_meshing_compute_pipeline(void) {
     return result_success;
 }
 
-result_t run_voxel_meshing_compute_pipeline(void) {
-    // TODO: Use seperate command buffer from transfer command buffer??
-
-    vkResetFences(device, 1, &transfer_fence);
-    vkResetCommandBuffer(transfer_command_buffer, 0);
-
-    if (vkBeginCommandBuffer(transfer_command_buffer, &(VkCommandBufferBeginInfo) {
+result_t encode_voxel_meshing_compute_pipeline(VkCommandBuffer command_buffer) {
+    if (vkBeginCommandBuffer(command_buffer, &(VkCommandBufferBeginInfo) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
     }) != VK_SUCCESS) {
         return result_command_buffer_begin_failure;
     }
 
-    vkCmdBindPipeline(transfer_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
-    vkCmdBindDescriptorSets(transfer_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
 
-    vkCmdDispatch(transfer_command_buffer, 8, 8, 8);
+    vkCmdDispatch(command_buffer, 8, 8, 8);
 
-    if (vkEndCommandBuffer(transfer_command_buffer) != VK_SUCCESS) {
+    if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
         return result_command_buffer_end_failure;
     }
-
-    vkQueueSubmit(queue, 1, &(VkSubmitInfo) {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &transfer_command_buffer
-    }, transfer_fence);
-
-    vkWaitForFences(device, 1, &transfer_fence, VK_TRUE, UINT64_MAX);
 
     return result_success;
 }

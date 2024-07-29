@@ -93,41 +93,28 @@ result_t init_voxel_generation_compute_pipeline(void) {
     return result_success;
 }
 
-result_t run_voxel_generation_compute_pipeline(void) {
-    // TODO: Use seperate command buffer from transfer command buffer??
-
-    vkResetFences(device, 1, &transfer_fence);
-    vkResetCommandBuffer(transfer_command_buffer, 0);
-
-    if (vkBeginCommandBuffer(transfer_command_buffer, &(VkCommandBufferBeginInfo) {
+result_t encode_voxel_generation_compute_pipeline(VkCommandBuffer command_buffer) {
+    if (vkBeginCommandBuffer(command_buffer, &(VkCommandBufferBeginInfo) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
     }) != VK_SUCCESS) {
         return result_command_buffer_begin_failure;
     }
 
-    vkCmdPipelineBarrier(transfer_command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
+    vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
         DEFAULT_VK_IMAGE_MEMORY_BARRIER,
         .image = voxel_image,
         .newLayout = VK_IMAGE_LAYOUT_GENERAL,
         .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
     });
-    vkCmdBindPipeline(transfer_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
-    vkCmdBindDescriptorSets(transfer_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
 
-    vkCmdDispatch(transfer_command_buffer, 8, 8, 8);
+    vkCmdDispatch(command_buffer, 8, 8, 8);
 
-    if (vkEndCommandBuffer(transfer_command_buffer) != VK_SUCCESS) {
+    if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
         return result_command_buffer_end_failure;
     }
-
-    vkQueueSubmit(queue, 1, &(VkSubmitInfo) {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &transfer_command_buffer
-    }, transfer_fence);
-
-    vkWaitForFences(device, 1, &transfer_fence, VK_TRUE, UINT64_MAX);
 
     return result_success;
 }

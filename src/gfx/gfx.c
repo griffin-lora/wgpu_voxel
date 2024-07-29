@@ -1,6 +1,7 @@
 #include "gfx.h"
 #include "chrono.h"
 #include "gfx/default.h"
+#include "gfx/gfx_util.h"
 #include "gfx/voxel_generation_compute_pipeline.h"
 #include "gfx/voxel_meshing_compute_pipeline.h"
 #include "gfx/voxel_render_pipeline.h"
@@ -48,11 +49,11 @@ static VkSurfaceKHR surface;
 static VkExtent2D swap_image_extent;
 static VkQueue presentation_queue;
 static bool framebuffer_resized;
+static VkCommandPool command_pool;
 
 VkSampleCountFlagBits render_multisample_flags;
 
 VkRenderPass frame_render_pass;
-static VkCommandPool frame_command_pool;
 static VkCommandBuffer frame_command_buffers[NUM_FRAMES_IN_FLIGHT];
 
 static uint32_t frame_index = 0;
@@ -66,9 +67,8 @@ static VmaAllocation depth_image_allocation;
 static VkImageView depth_image_view;
 VkFormat depth_image_format;
 
-VkCommandPool transfer_command_pool;
-VkCommandBuffer transfer_command_buffer;
-VkFence transfer_fence;
+VkCommandBuffer generic_command_buffer;
+VkFence generic_command_fence;
 
 static const char* layers[] = {
     "VK_LAYER_KHRONOS_validation"
@@ -537,19 +537,6 @@ static result_t init_vk_core(void) {
         return result_allocator_create_failure;
     }
 
-    for (size_t i = 0; i < NUM_FRAMES_IN_FLIGHT; i++) {
-        if (
-            vkCreateSemaphore(device, &(VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO }, NULL, &image_available_semaphores[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(device, &(VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO }, NULL, &render_finished_semaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(device, &(VkFenceCreateInfo) {
-                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                .flags = VK_FENCE_CREATE_SIGNALED_BIT
-            }, NULL, &in_flight_fences[i]) != VK_SUCCESS
-        ) {
-            return result_synchronization_primitive_create_failure;
-        }
-    }
-
     vkGetDeviceQueue(device, queue_family_indices.graphics, 0, &queue);
     vkGetDeviceQueue(device, queue_family_indices.presentation, 0, &presentation_queue);
 
@@ -580,17 +567,30 @@ static result_t init_vk_core(void) {
         return result;
     }
 
+    for (size_t i = 0; i < NUM_FRAMES_IN_FLIGHT; i++) {
+        if (
+            vkCreateSemaphore(device, &(VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO }, NULL, &image_available_semaphores[i]) != VK_SUCCESS ||
+            vkCreateSemaphore(device, &(VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO }, NULL, &render_finished_semaphores[i]) != VK_SUCCESS ||
+            vkCreateFence(device, &(VkFenceCreateInfo) {
+                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                .flags = VK_FENCE_CREATE_SIGNALED_BIT
+            }, NULL, &in_flight_fences[i]) != VK_SUCCESS
+        ) {
+            return result_synchronization_primitive_create_failure;
+        }
+    }
+
     if (vkCreateCommandPool(device, &(VkCommandPoolCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = queue_family_indices.graphics
-    }, NULL, &frame_command_pool) != VK_SUCCESS) {
+    }, NULL, &command_pool) != VK_SUCCESS) {
         return result_command_pool_create_failure;
     }
 
     if (vkAllocateCommandBuffers(device, &(VkCommandBufferAllocateInfo) {
         DEFAULT_VK_COMMAND_BUFFER,
-        .commandPool = frame_command_pool,
+        .commandPool = command_pool,
         .commandBufferCount = NUM_FRAMES_IN_FLIGHT
     }, frame_command_buffers) != VK_SUCCESS) {
         return result_command_buffers_allocate_failure;
@@ -668,28 +668,20 @@ static result_t init_vk_core(void) {
         return result;
     }
 
-    if (vkCreateCommandPool(device, &(VkCommandPoolCreateInfo) {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = queue_family_indices.graphics
-    }, NULL, &transfer_command_pool) != VK_SUCCESS) {
-        return result_command_pool_create_failure;
-    }
-
     if (vkAllocateCommandBuffers(device, &(VkCommandBufferAllocateInfo) {
         DEFAULT_VK_COMMAND_BUFFER,
-        .commandPool = transfer_command_pool
-    }, &transfer_command_buffer) != VK_SUCCESS) {
+        .commandPool = command_pool
+    }, &generic_command_buffer) != VK_SUCCESS) {
         return result_command_buffers_allocate_failure;
     }
 
     if (vkCreateFence(device, &(VkFenceCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
-    }, NULL, &transfer_fence) != VK_SUCCESS) {
+    }, NULL, &generic_command_fence) != VK_SUCCESS) {
         return result_synchronization_primitive_create_failure;
     }
 
-    if ((result = init_voxel_render_pipeline(&physical_device_properties)) != result_success) {
+    if ((result = init_voxel_render_pipeline(generic_command_buffer, generic_command_fence, &physical_device_properties)) != result_success) {
         return result;
     }
 
@@ -701,11 +693,23 @@ static result_t init_vk_core(void) {
         return result;
     }
 
-    if ((result = run_voxel_generation_compute_pipeline()) != result_success) {
+    if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
+        return result;
+    }
+    if ((result = encode_voxel_generation_compute_pipeline(generic_command_buffer)) != result_success) {
+        return result;
+    }
+    if ((result = submit_and_wait(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
 
-    if ((result = run_voxel_meshing_compute_pipeline()) != result_success) {
+    if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
+        return result;
+    }
+    if ((result = encode_voxel_meshing_compute_pipeline(generic_command_buffer)) != result_success) {
+        return result;
+    }
+    if ((result = submit_and_wait(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
 
@@ -719,10 +723,9 @@ static void term_vk_core(void) {
     term_voxel_meshing_compute_pipeline();
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
-    vkDestroyCommandPool(device, frame_command_pool, NULL);
+    vkDestroyCommandPool(device, command_pool, NULL);
 
-    vkDestroyCommandPool(device, transfer_command_pool, NULL);
-    vkDestroyFence(device, transfer_fence, NULL);
+    vkDestroyFence(device, generic_command_fence, NULL);
 
     term_swapchain_dependents();
     

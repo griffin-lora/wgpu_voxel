@@ -36,6 +36,8 @@ typedef enum {
     result_swapchain_image_present_failure,
     result_memory_map_failure,
     result_fences_wait_failure,
+    result_fences_reset_failure,
+    result_command_buffer_reset_failure,
 
     result_image_pixels_load_failure,
 
