@@ -15,25 +15,25 @@
 static pipeline_t pipeline;
 static VkBuffer voxel_vertex_count_buffer;
 static VmaAllocation voxel_vertex_count_buffer_allocation;
-VkBuffer voxel_vertex_buffer;
-static VmaAllocation voxel_vertex_buffer_allocation;
+static VkBuffer voxel_vertex_staging_buffer;
+static VmaAllocation voxel_vertex_staging_buffer_allocation;
 
 result_t init_voxel_meshing_compute_pipeline(void) {
     result_t result;
 
     if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
         DEFAULT_VK_BUFFER,
-        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .size = sizeof(uint32_t)
-    }, &staging_allocation_create_info, &voxel_vertex_count_buffer, &voxel_vertex_count_buffer_allocation, NULL) != VK_SUCCESS) {
+    }, &shared_allocation_create_info, &voxel_vertex_count_buffer, &voxel_vertex_count_buffer_allocation, NULL) != VK_SUCCESS) {
         return result_buffer_create_failure;
     }
 
     if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
         DEFAULT_VK_BUFFER,
-        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .size = NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * sizeof(voxel_vertex_t)
-    }, &staging_allocation_create_info, &voxel_vertex_buffer, &voxel_vertex_buffer_allocation, NULL) != VK_SUCCESS) {
+    }, &device_allocation_create_info, &voxel_vertex_staging_buffer, &voxel_vertex_staging_buffer_allocation, NULL) != VK_SUCCESS) {
         return result_buffer_create_failure;
     }
 
@@ -86,7 +86,7 @@ result_t init_voxel_meshing_compute_pipeline(void) {
             {
                 .type = descriptor_info_type_buffer,
                 .buffer = {
-                    .buffer = voxel_vertex_buffer,
+                    .buffer = voxel_vertex_staging_buffer,
                     .range = NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * sizeof(voxel_vertex_t)
                 }
             }
@@ -140,8 +140,55 @@ result_t encode_voxel_meshing_compute_pipeline(VkCommandBuffer command_buffer) {
     return result_success;
 }
 
+result_t create_voxel_vertex_buffer(VkCommandBuffer command_buffer, VkFence command_fence, uint32_t* num_voxel_vertices, VkBuffer* voxel_vertex_buffer, VmaAllocation* voxel_vertex_buffer_allocation) {
+    result_t result;
+
+    uint32_t* num_vertices_mapped;
+
+    if (vmaMapMemory(allocator, voxel_vertex_count_buffer_allocation, (void**) &num_vertices_mapped) != VK_SUCCESS) {
+        return result_memory_map_failure;
+    }
+
+    uint32_t num_vertices = *num_vertices_mapped;
+
+    vmaUnmapMemory(allocator, voxel_vertex_count_buffer_allocation);
+
+    if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
+        DEFAULT_VK_VERTEX_BUFFER,
+        .size = num_vertices * sizeof(voxel_vertex_t)
+    }, &device_allocation_create_info, voxel_vertex_buffer, voxel_vertex_buffer_allocation, NULL) != VK_SUCCESS) {
+        return result_buffer_create_failure;
+    }
+
+    if (vkBeginCommandBuffer(command_buffer, &(VkCommandBufferBeginInfo) {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    }) != VK_SUCCESS) {
+        return result_command_buffer_begin_failure;
+    }
+
+    vkCmdCopyBuffer(command_buffer, voxel_vertex_staging_buffer, *voxel_vertex_buffer, 1, &(VkBufferCopy) {
+        .size = num_vertices * sizeof(voxel_vertex_t)
+    });
+
+    if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
+        return result_command_buffer_end_failure;
+    }
+
+    if ((result = submit_and_wait(command_buffer, command_fence)) != result_success) {
+        return result;
+    }
+    if ((result = reset_command_processing(command_buffer, command_fence)) != result_success) {
+        return result;
+    }
+
+    *num_voxel_vertices = num_vertices;
+
+    return result_success;
+}
+
 void term_voxel_meshing_compute_pipeline(void) {
     destroy_pipeline(&pipeline);
     vmaDestroyBuffer(allocator, voxel_vertex_count_buffer, voxel_vertex_count_buffer_allocation);
-    vmaDestroyBuffer(allocator, voxel_vertex_buffer, voxel_vertex_buffer_allocation);
+    vmaDestroyBuffer(allocator, voxel_vertex_staging_buffer, voxel_vertex_staging_buffer_allocation);
 }

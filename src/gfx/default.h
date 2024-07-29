@@ -10,7 +10,7 @@ extern const VkPipelineDynamicStateCreateInfo default_dynamic_create_info;
 extern const VkBufferCreateInfo vertex_buffer_create_info;
 extern const VkBufferCreateInfo index_buffer_create_info;
 extern const VkBufferCreateInfo uniform_buffer_create_info;
-extern const VmaAllocationCreateInfo staging_allocation_create_info;
+extern const VmaAllocationCreateInfo shared_allocation_create_info;
 extern const VmaAllocationCreateInfo device_allocation_create_info;
 
 #define DEFAULT_VK_COMMAND_BUFFER\

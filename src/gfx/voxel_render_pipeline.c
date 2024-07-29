@@ -34,6 +34,9 @@ static VkSampler sampler;
 static VkImage image;
 static VmaAllocation image_allocation;
 static VkImageView image_view;
+uint32_t num_voxel_vertices;
+VkBuffer voxel_vertex_buffer;
+VmaAllocation voxel_vertex_buffer_allocation;
 
 typedef struct {
     mat4s view_projection;
@@ -111,7 +114,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
     if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
         DEFAULT_VK_UNIFORM_BUFFER,
         .size = uniforms_num_bytes
-    }, &staging_allocation_create_info, &uniform_buffer, &uniform_buffer_allocation, NULL) != VK_SUCCESS) {
+    }, &shared_allocation_create_info, &uniform_buffer, &uniform_buffer_allocation, NULL) != VK_SUCCESS) {
         return result_buffer_create_failure;
     }
 
@@ -253,7 +256,7 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
     uniforms[0].view_projection = get_view_projection();
 
     vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
-    vkCmdDraw(command_buffer, NUM_CUBE_VOXEL_VERTICES * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE * VOXEL_REGION_SIZE, 1, 0, 0);
+    vkCmdDraw(command_buffer, num_voxel_vertices, 1, 0, 0);
 
     return result_success;
 }
@@ -265,5 +268,6 @@ void term_voxel_render_pipeline() {
     vmaDestroyImage(allocator, image, image_allocation);
     vkDestroySampler(device, sampler, NULL);
     vmaDestroyBuffer(allocator, uniform_buffer, uniform_buffer_allocation);
+    vmaDestroyBuffer(allocator, voxel_vertex_buffer, voxel_vertex_buffer_allocation);
     destroy_pipeline(&pipeline);
 }

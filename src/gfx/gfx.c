@@ -715,7 +715,14 @@ static result_t init_vk_core(void) {
     if ((result = submit_and_wait(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
+    if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
+        return result;
+    }
     printf("Voxel meshing took %ldμs\n", get_current_microseconds() - start);
+
+    if ((result = create_voxel_vertex_buffer(generic_command_buffer, generic_command_fence, &num_voxel_vertices, &voxel_vertex_buffer, &voxel_vertex_buffer_allocation)) != result_success) {
+        return result;
+    }
 
     return result_success;
 }
