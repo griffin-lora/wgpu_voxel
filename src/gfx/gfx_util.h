@@ -10,24 +10,10 @@ result_t writes_to_buffer(VmaAllocation buffer_allocation, size_t num_write_byte
 
 typedef struct {
     VkBuffer buffer;
-    VmaAllocation allocation;
+    VmaAllocation buffer_allocation;
 } staging_t;
 
-typedef struct {
-    void** pixel_arrays;
-    VkDeviceSize num_pixel_bytes;
-    VkImageCreateInfo info;
-} image_create_info_t;
-
-result_t begin_images(size_t num_images, const image_create_info_t infos[], staging_t stagings[], VkImage images[], VmaAllocation allocations[]);
-void transfer_images(VkCommandBuffer command_buffer, size_t num_images, const image_create_info_t infos[], const staging_t stagings[], const VkImage images[]);
-void end_images(size_t num_images, const staging_t stagings[]);
-
-result_t begin_buffer(
-    const VkBufferCreateInfo* base_device_buffer_create_info,
-    VkDeviceSize num_elements, uint32_t num_element_bytes, const void* array,
-    staging_t* staging, VkBuffer* buffer, VmaAllocation* allocation
-);
+result_t create_image(VkCommandBuffer command_buffer, VkFence command_fence, const VkImageCreateInfo* image_create_info, VkDeviceSize num_pixel_bytes, const void* const* pixel_arrays, VkImage* image, VmaAllocation* image_allocation);
 
 typedef struct {
     enum {

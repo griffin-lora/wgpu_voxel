@@ -16,9 +16,16 @@
 #include <string.h>
 #include <stb/stb_image.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
-#define NUM_VOXEL_TEXTURE_IMAGES 1
 #define NUM_VOXEL_TEXTURE_LAYERS 4
+
+static const char* voxel_texture_layer_paths[NUM_VOXEL_TEXTURE_LAYERS] = {
+    "image/cube_voxel_0.png",
+    "image/cube_voxel_1.png",
+    "image/cube_voxel_2.png",
+    "image/cube_voxel_4.png"
+};
 
 static pipeline_t pipeline;
 static VkBuffer uniform_buffer;
@@ -38,72 +45,50 @@ static uint32_t uniform_stride;
 result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence command_fence, const VkPhysicalDeviceProperties* physical_device_properties) {
     result_t result;
 
-    struct {
-        const char* path;
-        int channels;
-    } image_load_infos[NUM_VOXEL_TEXTURE_IMAGES][NUM_VOXEL_TEXTURE_LAYERS] = {
-        {
-            { "image/cube_voxel_0.png", STBI_rgb },
-            { "image/cube_voxel_1.png", STBI_rgb },
-            { "image/cube_voxel_2.png", STBI_rgb },
-            { "image/cube_voxel_4.png", STBI_rgb }
+    uint32_t texture_size = 16;
+    uint32_t num_mip_levels = ((uint32_t)floorf(log2f((float)max_uint32(texture_size, texture_size)))) + 1;
+
+    const void* pixel_arrays[NUM_VOXEL_TEXTURE_LAYERS];
+
+    for (uint32_t layer_index = 0; layer_index < NUM_VOXEL_TEXTURE_LAYERS; layer_index++) {
+        int32_t width;
+        int32_t height;
+
+        const void* pixels = stbi_load(voxel_texture_layer_paths[layer_index], &width, &height, (int[1]) { 0 }, STBI_rgb_alpha);
+
+        if (pixels == NULL || width != height || width != (int32_t) texture_size) {
+            return result_file_read_failure; // TODO: Use a different error
         }
-    };
 
-    void* pixel_arrays[NUM_VOXEL_TEXTURE_IMAGES][NUM_VOXEL_TEXTURE_LAYERS];
-
-    image_create_info_t image_create_infos[NUM_VOXEL_TEXTURE_IMAGES] = {
-        {
-            .num_pixel_bytes = 3,
-            .info = {
-                DEFAULT_VK_SAMPLED_IMAGE,
-                .format = VK_FORMAT_R8G8B8_SRGB,
-                .arrayLayers = NUM_VOXEL_TEXTURE_LAYERS
-            }
-        }
-    };
-
-    for (size_t i = 0; i < NUM_VOXEL_TEXTURE_IMAGES; i++) {
-        uint32_t width;
-        uint32_t height;
-
-        image_create_info_t* info = &image_create_infos[i];
-        info->pixel_arrays = (void**)&pixel_arrays[i];
-        
-        for (size_t j = 0; j < info->info.arrayLayers; j++) {
-            int new_width;
-            int new_height;
-            info->pixel_arrays[j] = stbi_load(image_load_infos[i][j].path, &new_width, &new_height, (int[1]) { 0 }, image_load_infos[i][j].channels);
-
-            if (info->pixel_arrays[j] == NULL) {
-                return result_image_pixels_load_failure;
-            }
-
-            if (j > 0 && ((uint32_t)new_width != width || (uint32_t)new_width != height)) {
-                return result_image_dimensions_invalid;
-            }
-
-            width = (uint32_t)new_width;
-            height = (uint32_t)new_height;
-
-            info->info.extent.width = width;
-            info->info.extent.height = height;
-            info->info.mipLevels = ((uint32_t)floorf(log2f((float)max_uint32(width, height)))) + 1;
-        }
+        pixel_arrays[layer_index] = pixels;
     }
 
-    staging_t image_stagings[NUM_VOXEL_TEXTURE_IMAGES];
-
-    if ((result = begin_images(NUM_VOXEL_TEXTURE_IMAGES, image_create_infos, image_stagings, &image, &image_allocation)) != result_success) {
+    if ((result = create_image(command_buffer, command_fence, &(VkImageCreateInfo) {
+        DEFAULT_VK_SAMPLED_IMAGE,
+        .format = VK_FORMAT_R8G8B8_SRGB,
+        .extent = { texture_size, texture_size, 1 },
+        .mipLevels = num_mip_levels,
+        .arrayLayers = NUM_VOXEL_TEXTURE_LAYERS
+    }, 4, pixel_arrays, &image, &image_allocation)) != result_success) {
         return result;
     }
 
-    for (size_t i = 0; i < NUM_VOXEL_TEXTURE_IMAGES; i++) {
-        const image_create_info_t* info = &image_create_infos[i];
-        
-        for (size_t j = 0; j < info->info.arrayLayers; j++) {
-            stbi_image_free(info->pixel_arrays[j]);
+    for (uint32_t layer_index = 0; layer_index < NUM_VOXEL_TEXTURE_LAYERS; layer_index++) {
+        stbi_image_free((void*) pixel_arrays[layer_index]);
+    }
+
+    if (vkCreateImageView(device, &(VkImageViewCreateInfo) {
+        DEFAULT_VK_IMAGE_VIEW,
+        .image = image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+        .format = VK_FORMAT_R8G8B8_SRGB,
+        .subresourceRange = {
+            .levelCount = num_mip_levels,
+            .layerCount = NUM_VOXEL_TEXTURE_LAYERS,
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
         }
+    }, NULL, &image_view) != VK_SUCCESS) {
+        return result_image_view_create_failure;
     }
 
     if (vkCreateSampler(device, &(VkSamplerCreateInfo) {
@@ -114,49 +99,9 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .minFilter = VK_FILTER_NEAREST,
         .magFilter = VK_FILTER_NEAREST,
         .anisotropyEnable = VK_FALSE,
-        .maxLod = (float)image_create_infos[0].info.mipLevels
+        .maxLod = (float)num_mip_levels
     }, NULL, &sampler) != VK_SUCCESS) {
         return result_sampler_create_failure;
-    }
-
-    if (vkBeginCommandBuffer(command_buffer, &(VkCommandBufferBeginInfo) {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-    }) != VK_SUCCESS) {
-        return result_command_buffer_begin_failure;
-    }
-
-    transfer_images(command_buffer, NUM_VOXEL_TEXTURE_IMAGES, image_create_infos, image_stagings, &image);
-
-    if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
-        return result_command_buffer_end_failure;
-    }
-
-    if ((result = submit_and_wait(command_buffer, command_fence)) != result_success) {
-        return result;
-    }
-    if ((result = reset_command_processing(command_buffer, command_fence)) != result_success) {
-        return result;
-    }
-
-    end_images(NUM_VOXEL_TEXTURE_IMAGES, image_stagings);
-
-    //
-
-    for (size_t i = 0; i < NUM_VOXEL_TEXTURE_IMAGES; i++) {
-        const VkImageCreateInfo* image_create_info = &image_create_infos[i].info;
-
-        if (vkCreateImageView(device, &(VkImageViewCreateInfo) {
-            DEFAULT_VK_IMAGE_VIEW,
-            .image = image,
-            .viewType = image_create_info->arrayLayers == 1 ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY,
-            .format = image_create_info->format,
-            .subresourceRange.levelCount = image_create_info->mipLevels,
-            .subresourceRange.layerCount = image_create_info->arrayLayers,
-            .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
-        }, NULL, &image_view) != VK_SUCCESS) {
-            return result_image_view_create_failure;
-        }
     }
 
     uniform_stride = ceil_to_next_multiple(sizeof(voxel_uniform_t), (uint32_t)physical_device_properties->limits.minUniformBufferOffsetAlignment);
