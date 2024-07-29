@@ -28,7 +28,7 @@ int main() {
         microseconds_t delta_microseconds = end - start;
         delta = (float)delta_microseconds/1000000.0f;
 
-        microseconds_t remaining_microseconds = (1000000l/120l) - delta_microseconds;
+        microseconds_t remaining_microseconds = (1000000l/glfwGetVideoMode(glfwGetPrimaryMonitor())->refreshRate) - delta_microseconds;
         if (remaining_microseconds > 0) {
             sleep_microseconds(remaining_microseconds);
         }
