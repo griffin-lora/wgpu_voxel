@@ -67,8 +67,8 @@ float get_layer_index() {
     switch (voxel_type) {
         case VOXEL_TYPE_GRASS: switch (face_index) {
             default: return 3.0;
-            case 3: return 0.0;
-            case 2: return 2.0;
+            case VOXEL_PY_FACE_INDEX: return 0.0;
+            case VOXEL_NY_FACE_INDEX: return 2.0;
         }
         case VOXEL_TYPE_STONE: return 1.0;
         case VOXEL_TYPE_DIRT: return 2.0;
