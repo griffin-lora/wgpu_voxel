@@ -3,7 +3,6 @@
 #include "result.h"
 #include <cglm/types-struct.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 extern uint32_t num_voxel_vertices;
 extern VkBuffer voxel_vertex_buffer;

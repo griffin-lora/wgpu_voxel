@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <malloc.h>
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan.h>
 
 result_t create_shader_module(const char* path, VkShaderModule* shader_module) {
     if (access(path, F_OK) != 0) {
@@ -150,7 +150,7 @@ result_t create_image(VkCommandBuffer command_buffer, VkFence command_fence, con
     if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
         DEFAULT_VK_STAGING_BUFFER,
         .size = num_image_bytes
-    }, &shared_allocation_create_info, &staging.buffer, &staging.buffer_allocation, NULL) != VK_SUCCESS) {
+    }, &shared_write_allocation_create_info, &staging.buffer, &staging.buffer_allocation, NULL) != VK_SUCCESS) {
         return result_buffer_create_failure;
     }
 

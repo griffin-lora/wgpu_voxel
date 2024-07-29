@@ -7,7 +7,7 @@
 #include "voxel.h"
 #include <stdio.h>
 #include <string.h>
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan.h>
 
 static pipeline_t pipeline;
 static VkImage voxel_image;

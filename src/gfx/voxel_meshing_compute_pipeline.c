@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan.h>
 
 static pipeline_t pipeline;
 static VkBuffer voxel_vertex_count_buffer;
@@ -25,7 +25,7 @@ result_t init_voxel_meshing_compute_pipeline(void) {
         DEFAULT_VK_BUFFER,
         .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .size = sizeof(uint32_t)
-    }, &shared_allocation_create_info, &voxel_vertex_count_buffer, &voxel_vertex_count_buffer_allocation, NULL) != VK_SUCCESS) {
+    }, &shared_read_allocation_create_info, &voxel_vertex_count_buffer, &voxel_vertex_count_buffer_allocation, NULL) != VK_SUCCESS) {
         return result_buffer_create_failure;
     }
 
@@ -152,6 +152,8 @@ result_t create_voxel_vertex_buffer(VkCommandBuffer command_buffer, VkFence comm
     uint32_t num_vertices = *num_vertices_mapped;
 
     vmaUnmapMemory(allocator, voxel_vertex_count_buffer_allocation);
+
+    printf("Voxel mesh vertices: %d\n", num_vertices);
 
     if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
         DEFAULT_VK_VERTEX_BUFFER,

@@ -1,6 +1,6 @@
 #pragma once
 #include "result.h"
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan.h>
 
 extern VkImageView voxel_image_view;
 

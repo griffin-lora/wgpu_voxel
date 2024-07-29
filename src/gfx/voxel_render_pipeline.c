@@ -16,7 +16,6 @@
 #include <string.h>
 #include <stb/stb_image.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 #define NUM_VOXEL_TEXTURE_LAYERS 4
 
@@ -40,9 +39,15 @@ VmaAllocation voxel_vertex_buffer_allocation;
 
 typedef struct {
     mat4s view_projection;
+} voxel_push_constants_t;
+
+typedef struct {
+    vec3s region_position;
 } voxel_uniform_t;
 
-static voxel_uniform_t* uniforms;
+#define NUM_UNIFORMS 2
+
+static void* uniforms_mapped;
 static uint32_t uniform_stride;
 
 result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence command_fence, const VkPhysicalDeviceProperties* physical_device_properties) {
@@ -109,16 +114,16 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
 
     uniform_stride = ceil_to_next_multiple(sizeof(voxel_uniform_t), (uint32_t)physical_device_properties->limits.minUniformBufferOffsetAlignment);
 
-    uint32_t uniforms_num_bytes = sizeof(voxel_uniform_t) * uniform_stride;
+    uint32_t uniforms_num_bytes = NUM_UNIFORMS * uniform_stride;
 
     if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
         DEFAULT_VK_UNIFORM_BUFFER,
         .size = uniforms_num_bytes
-    }, &shared_allocation_create_info, &uniform_buffer, &uniform_buffer_allocation, NULL) != VK_SUCCESS) {
+    }, &shared_write_allocation_create_info, &uniform_buffer, &uniform_buffer_allocation, NULL) != VK_SUCCESS) {
         return result_buffer_create_failure;
     }
 
-    if (vmaMapMemory(allocator, uniform_buffer_allocation, (void*) &uniforms) != VK_SUCCESS) {
+    if (vmaMapMemory(allocator, uniform_buffer_allocation, &uniforms_mapped) != VK_SUCCESS) {
         return result_memory_map_failure;
     }
     
@@ -140,7 +145,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
                 {
                     DEFAULT_VK_DESCRIPTOR_BINDING,
                     .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
                 },
                 {
@@ -157,7 +162,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
                 .buffer = {
                     .buffer = uniform_buffer,
                     .offset = 0,
-                    .range = uniforms_num_bytes
+                    .range = uniform_stride
                 }
             },
             {
@@ -176,7 +181,12 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
     
     if (vkCreatePipelineLayout(device, &(VkPipelineLayoutCreateInfo) {
         DEFAULT_VK_PIPELINE_LAYOUT,
-        .pSetLayouts = &pipeline.descriptor_set_layout
+        .pSetLayouts = &pipeline.descriptor_set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &(VkPushConstantRange) {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .size = sizeof(voxel_push_constants_t)
+        }
     }, NULL, &pipeline.pipeline_layout) != VK_SUCCESS) {
         return result_pipeline_layout_create_failure;
     }
@@ -245,18 +255,26 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
 
     vkDestroyShaderModule(device, vertex_shader_module, NULL);
     vkDestroyShaderModule(device, fragment_shader_module, NULL);
+    
+    ((voxel_uniform_t*) (uniforms_mapped + (0 * uniform_stride)))->region_position = (vec3s) {{ 0.0f, 0.0f, 0.0f }};
+    ((voxel_uniform_t*) (uniforms_mapped + (1 * uniform_stride)))->region_position = (vec3s) {{ 32.0f, 0.0f, 0.0f }};
 
     return result_success;
 }
 
 result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
-    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
 
-    uniforms[0].view_projection = get_view_projection();
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+
+    mat4s view_projection = get_view_projection();
+    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(voxel_push_constants_t), &view_projection);
 
     vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
-    vkCmdDraw(command_buffer, num_voxel_vertices, 1, 0, 0);
+    
+    for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 1, (uint32_t[1]) { i * uniform_stride });
+        vkCmdDraw(command_buffer, num_voxel_vertices, 1, 0, 0);
+    }
 
     return result_success;
 }

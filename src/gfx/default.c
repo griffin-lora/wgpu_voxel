@@ -54,9 +54,15 @@ const VkBufferCreateInfo uniform_buffer_create_info = {
     .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
 };
 
-const VmaAllocationCreateInfo shared_allocation_create_info = {
+const VmaAllocationCreateInfo shared_write_allocation_create_info = {
     DEFAULT_VMA_ALLOCATION,
     .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+    .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+};
+
+const VmaAllocationCreateInfo shared_read_allocation_create_info = {
+    DEFAULT_VMA_ALLOCATION,
+    .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
     .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 };
 

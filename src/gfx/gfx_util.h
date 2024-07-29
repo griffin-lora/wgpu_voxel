@@ -2,7 +2,7 @@
 #include "result.h"
 #include <vk_mem_alloc.h>
 #include <stdbool.h>
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan.h>
 
 result_t create_shader_module(const char* path, VkShaderModule* shader_module);
 result_t write_to_buffer(VmaAllocation buffer_allocation, size_t num_bytes, const void* data);

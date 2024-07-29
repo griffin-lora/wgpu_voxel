@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480

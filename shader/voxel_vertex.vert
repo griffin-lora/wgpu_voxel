@@ -51,8 +51,12 @@ vertex_t cube_vertices[NUM_CUBE_VOXEL_VERTICES] = {
     vertex_t(vec3(0.0, 0.0, -1.0), vec2(0.0, 1.0))
 };
 
-layout(set = 0, binding = 0) uniform voxel_uniform_t {
+layout(push_constant, std430) uniform voxel_push_constants_t {
     mat4 view_projection;
+};
+
+layout(set = 0, binding = 0) uniform voxel_uniform_t {
+    vec3 region_position;
 };
 
 layout(location = 0) in vec3 vertex_position;
@@ -78,7 +82,7 @@ float get_layer_index() {
 
 void main() {
     vertex_t vertex = cube_vertices[vertex_index];
-    vec3 position = vertex_position + vertex.position;
+    vec3 position = region_position + vertex_position + vertex.position;
 
     gl_Position = view_projection * vec4(position, 1.0);
     vert_texel_coord = vec3(vertex.texel_coord, get_layer_index());
