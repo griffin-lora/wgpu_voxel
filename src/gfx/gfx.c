@@ -699,9 +699,11 @@ static result_t init_vk_core(void) {
     if ((result = encode_voxel_generation_compute_pipeline(generic_command_buffer)) != result_success) {
         return result;
     }
+    microseconds_t start = get_current_microseconds();
     if ((result = submit_and_wait(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
+    printf("Voxel generation took %ldμs\n", get_current_microseconds() - start);
 
     if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
@@ -709,9 +711,11 @@ static result_t init_vk_core(void) {
     if ((result = encode_voxel_meshing_compute_pipeline(generic_command_buffer)) != result_success) {
         return result;
     }
+    start = get_current_microseconds();
     if ((result = submit_and_wait(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
+    printf("Voxel meshing took %ldμs\n", get_current_microseconds() - start);
 
     return result_success;
 }
