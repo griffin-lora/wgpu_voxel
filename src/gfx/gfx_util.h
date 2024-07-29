@@ -28,8 +28,6 @@ typedef struct {
 
 result_t create_descriptor_set(const VkDescriptorSetLayoutCreateInfo* info, descriptor_info_t infos[], VkDescriptorSetLayout* descriptor_set_layout, VkDescriptorPool* descriptor_pool, VkDescriptorSet* descriptor_set);
 
-void destroy_images(size_t num_images, const VkImage images[], const VmaAllocation image_allocations[], const VkImageView image_views[]);
-
 void begin_pipeline(
     VkCommandBuffer command_buffer,
     VkFramebuffer image_framebuffer, VkExtent2D image_extent,
