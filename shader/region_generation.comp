@@ -13,13 +13,15 @@ void main() {
     uvec3 voxel_position = gl_GlobalInvocationID;
     ivec3 voxel_image_position = ivec3(voxel_position);
 
-    float value = perlinNoise(0.25 * vec2(voxel_position.x, voxel_position.z), 1, 6, 0.5, 2.0, 0x578437ad);
-    value = (value + 1.0) * 0.5;
-    float height = value * 16.0;
+    ivec3 voxel_world_position = region_position + voxel_image_position;
 
-    if (voxel_position.y > height) {
+    float value = perlinNoise(0.01 * vec2(voxel_world_position.x, voxel_world_position.z), 1, 6, 0.5, 2.0, 0x578437ad);
+    value = (value + 1.0) * 0.5;
+    int height = int(value * 16.0);
+
+    if (voxel_world_position.y > height) {
         imageStore(voxel_image, voxel_image_position, uvec4(VOXEL_TYPE_AIR));
-    } else if (voxel_position.y == height) {
+    } else if (voxel_world_position.y == height) {
         imageStore(voxel_image, voxel_image_position, uvec4(VOXEL_TYPE_GRASS));
     } else {
         imageStore(voxel_image, voxel_image_position, uvec4(VOXEL_TYPE_DIRT));

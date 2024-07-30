@@ -76,7 +76,7 @@ result_t init_region_management(void) {
         }
         
         *uniform = (region_uniform_t) {
-            .region_position = (ivec3s) {{ 16 * (int32_t) region_index, 0, 0 }}
+            .region_position = (ivec3s) {{ 16 * (int32_t) (region_index / 16), 0, 16 * (int32_t) (region_index % 16) }}
         };
 
         vmaUnmapMemory(allocator, allocation_info->uniform_buffer_allocation);

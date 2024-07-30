@@ -4,7 +4,7 @@
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
-#define NUM_REGIONS 16
+#define NUM_REGIONS 256
 
 typedef struct {
     VkDescriptorSet descriptor_sets[2];
