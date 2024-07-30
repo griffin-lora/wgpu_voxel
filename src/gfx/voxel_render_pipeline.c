@@ -43,7 +43,7 @@ typedef struct {
     vec3s region_position;
 } voxel_uniform_t;
 
-#define NUM_UNIFORMS 2
+#define NUM_UNIFORMS 10
 
 static void* uniforms_mapped;
 static uint32_t uniform_stride;
@@ -233,9 +233,10 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
 
     vkDestroyShaderModule(device, mesh_shader_module, NULL);
     vkDestroyShaderModule(device, fragment_shader_module, NULL);
-    
-    ((voxel_uniform_t*) (uniforms_mapped + (0 * uniform_stride)))->region_position = (vec3s) {{ 0.0f, 0.0f, 0.0f }};
-    ((voxel_uniform_t*) (uniforms_mapped + (1 * uniform_stride)))->region_position = (vec3s) {{ 32.0f, 0.0f, 0.0f }};
+
+    for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
+        ((voxel_uniform_t*) (uniforms_mapped + (i * uniform_stride)))->region_position = (vec3s) {{ 16.0f * (float) i, 0.0f, 0.0f }};
+    }
 
     return result_success;
 }
@@ -249,7 +250,7 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
 
     for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 1, (uint32_t[1]) { i * uniform_stride });
-        vkCmdDrawMeshTasksEXT(command_buffer, 8, 8, 8);
+        vkCmdDrawMeshTasksEXT(command_buffer, 16, 16, 16);
     }
 
     return result_success;
