@@ -726,9 +726,6 @@ static result_t init_vk_core(void) {
         return result;
     }
 
-    // if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
-    //     return result;
-    // }
     if ((result = record_region_generation_compute_pipeline(generic_command_buffer)) != result_success) {
         return result;
     }
@@ -749,6 +746,8 @@ static void term_vk_core(void) {
     term_region_management();
     term_region_render_pipeline();
     term_region_generation_compute_pipeline();
+
+    vkDestroyDescriptorPool(device, generic_descriptor_pool, NULL);
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
     vkDestroyCommandPool(device, command_pool, NULL);

@@ -35,7 +35,7 @@ result_t init_region_management(void) {
                 .descriptorCount = 1
             }
         },
-        .maxSets = NUM_REGIONS
+        .maxSets = NUM_REGIONS * 2
     }, NULL, &region_descriptor_pool) != VK_SUCCESS) {
         return result_descriptor_pool_create_failure;
     }

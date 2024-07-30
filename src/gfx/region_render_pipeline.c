@@ -258,7 +258,7 @@ result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
     vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(push_constants_t), &view_projection);
 
     for (uint32_t i = 0; i < NUM_REGIONS; i++) {
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 2, (VkDescriptorSet[2]) { region_render_pipeline_infos[i].descriptor_set }, 0, NULL);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 2, (VkDescriptorSet[2]) { descriptor_set, region_render_pipeline_infos[i].descriptor_set }, 0, NULL);
         vkCmdDrawMeshTasksEXT(command_buffer, 8, 8, 8);
     }
 
@@ -268,6 +268,7 @@ result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
 void term_region_render_pipeline() {
     destroy_pipeline(&pipeline);
     vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
+    vkDestroyDescriptorSetLayout(device, region_render_pipeline_set_layout, NULL);
     vkDestroyImageView(device, color_image_view, NULL);
     vmaDestroyImage(allocator, color_image, color_image_allocation);
     vkDestroySampler(device, color_sampler, NULL);
