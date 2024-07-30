@@ -1,6 +1,6 @@
 #version 460
 
-layout(binding = 1) uniform sampler2DArray tex_sampler;
+layout(binding = 2) uniform sampler2DArray tex_sampler;
 
 layout(location = 0) in vec3 vert_texel_coord;
 

@@ -689,10 +689,6 @@ static result_t init_vk_core(void) {
 
     vk_init_proc();
 
-    if ((result = init_voxel_render_pipeline(generic_command_buffer, generic_command_fence, &physical_device_properties)) != result_success) {
-        return result;
-    }
-
     if ((result = init_voxel_generation_compute_pipeline()) != result_success) {
         return result;
     }
@@ -729,6 +725,10 @@ static result_t init_vk_core(void) {
     printf("Voxel meshing took %ldμs\n", get_current_microseconds() - start);
 
     if ((result = create_voxel_vertex_buffer(generic_command_buffer, generic_command_fence, &num_voxel_vertices, &voxel_vertex_buffer, &voxel_vertex_buffer_allocation)) != result_success) {
+        return result;
+    }
+
+    if ((result = init_voxel_render_pipeline(generic_command_buffer, generic_command_fence, &physical_device_properties)) != result_success) {
         return result;
     }
 

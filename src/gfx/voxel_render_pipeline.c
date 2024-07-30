@@ -4,6 +4,7 @@
 #include "gfx/default.h"
 #include "gfx/pipeline.h"
 #include "gfx/gfx_util.h"
+#include "gfx/voxel_generation_compute_pipeline.h"
 #include "gfx/voxel_meshing_compute_pipeline.h"
 #include "util.h"
 #include "result.h"
@@ -141,23 +142,36 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         &(VkDescriptorSetLayoutCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             
-            .bindingCount = 2,
-            .pBindings = (VkDescriptorSetLayoutBinding[2]) {
+            .bindingCount = 3,
+            .pBindings = (VkDescriptorSetLayoutBinding[3]) {
                 {
                     DEFAULT_VK_DESCRIPTOR_BINDING,
                     .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                     .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT
                 },
                 {
                     DEFAULT_VK_DESCRIPTOR_BINDING,
                     .binding = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                    .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT
+                },
+                {
+                    DEFAULT_VK_DESCRIPTOR_BINDING,
+                    .binding = 2,
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
                 }
             }
         },
-        (descriptor_info_t[2]) {
+        (descriptor_info_t[3]) {
+            {
+                .type = descriptor_info_type_image,
+                .image = {
+                    .imageView = voxel_image_view,
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL
+                }
+            },
             {
                 .type = descriptor_info_type_buffer,
                 .buffer = {
@@ -237,12 +251,9 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
     mat4s view_projection = get_view_projection();
     vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(voxel_push_constants_t), &view_projection);
 
-    // vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
-    
     for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 1, (uint32_t[1]) { i * uniform_stride });
-        vkCmdDrawMeshTasksEXT(command_buffer, 1, 1, 1);
-        // vkCmdDraw(command_buffer, num_voxel_vertices, 1, 0, 0);
+        vkCmdDrawMeshTasksEXT(command_buffer, 8, 8, 8);
     }
 
     return result_success;
