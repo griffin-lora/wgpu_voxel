@@ -44,7 +44,7 @@ typedef struct {
     vec3s region_position;
 } voxel_uniform_t;
 
-#define NUM_UNIFORMS 10
+#define NUM_UNIFORMS 16
 
 static void* uniforms_mapped;
 static uint32_t uniform_stride;
@@ -142,6 +142,10 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         return result_sampler_create_failure;
     }
     
+    VkShaderModule task_shader_module;
+    if ((result = create_shader_module("shader/voxel_task.spv", &task_shader_module)) != result_success) {
+        return result;
+    }
     VkShaderModule mesh_shader_module;
     if ((result = create_shader_module("shader/voxel_mesh.spv", &mesh_shader_module)) != result_success) {
         return result;
@@ -161,7 +165,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
                     DEFAULT_VK_DESCRIPTOR_BINDING,
                     .binding = 0,
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT
+                    .stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT
                 },
                 {
                     DEFAULT_VK_DESCRIPTOR_BINDING,
@@ -223,8 +227,13 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &(VkGraphicsPipelineCreateInfo) {
         DEFAULT_VK_GRAPHICS_PIPELINE,
 
-        .stageCount = 2,
-        .pStages = (VkPipelineShaderStageCreateInfo[2]) {
+        .stageCount = 3,
+        .pStages = (VkPipelineShaderStageCreateInfo[3]) {
+            {
+                DEFAULT_VK_SHADER_STAGE,
+                .stage = VK_SHADER_STAGE_TASK_BIT_EXT,
+                .module = task_shader_module
+            },
             {
                 DEFAULT_VK_SHADER_STAGE,
                 .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
@@ -248,7 +257,8 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
     }, NULL, &pipeline.pipeline) != VK_SUCCESS) {
         return result_graphics_pipelines_create_failure;
     }
-
+    
+    vkDestroyShaderModule(device, task_shader_module, NULL);
     vkDestroyShaderModule(device, mesh_shader_module, NULL);
     vkDestroyShaderModule(device, fragment_shader_module, NULL);
 
