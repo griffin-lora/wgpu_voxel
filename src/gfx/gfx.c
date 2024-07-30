@@ -155,6 +155,15 @@ static uint32_t get_presentation_queue_family_index(VkPhysicalDevice physical_de
 static result_t get_physical_device(uint32_t num_physical_devices, const VkPhysicalDevice physical_devices[], VkPhysicalDevice* out_physical_device, uint32_t* out_num_surface_formats, uint32_t* out_num_present_modes, queue_family_indices_t* out_queue_family_indices) {
     result_t result = result_suitable_physical_device_unavailable;
 
+    printf("Physical devices: %d\n", num_physical_devices);
+    for (size_t i = 0; i < num_physical_devices; i++) {
+        VkPhysicalDevice physical_device = physical_devices[i];
+        
+        VkPhysicalDeviceProperties physical_device_properties;
+        vkGetPhysicalDeviceProperties(physical_device, &physical_device_properties);
+        printf("Physical device: %s\n", physical_device_properties.deviceName);
+    }
+
     for (size_t i = 0; i < num_physical_devices; i++) {
         VkPhysicalDevice physical_device = physical_devices[i];
 
