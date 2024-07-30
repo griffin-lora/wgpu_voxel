@@ -77,8 +77,8 @@ static const char* layers[] = {
 
 static const char* extensions[] = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_NV_MESH_SHADER_EXTENSION_NAME,
-    // VK_KHR_SPIRV_1_4_EXTENSION_NAME
+    VK_EXT_MESH_SHADER_EXTENSION_NAME,
+    VK_KHR_SPIRV_1_4_EXTENSION_NAME
 };
 
 static result_t check_layers(void) {
@@ -506,8 +506,8 @@ static result_t init_vk_core(void) {
             .features = {
                 .samplerAnisotropy = VK_TRUE
             },
-            .pNext = &(VkPhysicalDeviceMeshShaderFeaturesNV) {
-                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV,
+            .pNext = &(VkPhysicalDeviceMeshShaderFeaturesEXT) {
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
                 .taskShader = true,
                 .meshShader = true
             }

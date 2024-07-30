@@ -41,4 +41,4 @@ clean:
 	$(GLSLC) $< -o $@
 
 %.spv: %.mesh Makefile
-	$(GLSLC) $< -o $@
+	$(GLSLC) --target-env=vulkan1.2 $< -o $@

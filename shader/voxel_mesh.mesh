@@ -1,5 +1,5 @@
 #version 460
-#extension GL_NV_mesh_shader : require
+#extension GL_EXT_mesh_shader : require
 #include "voxel.glsl"
 
 struct vertex_t {
@@ -53,7 +53,7 @@ vertex_t cube_vertices[NUM_CUBE_VOXEL_VERTICES] = {
 };
 
 
-layout(local_size_x = 1) in;
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout(triangles, max_vertices = 64, max_primitives = 126) out;
 
@@ -70,17 +70,15 @@ layout(location = 0) out vertex_out_t {
 } vertex_out[];
 
 void main() {
-    gl_MeshVerticesNV[0].gl_Position = view_projection * vec4(cube_vertices[0].position, 1.0);
-    gl_MeshVerticesNV[1].gl_Position = view_projection * vec4(cube_vertices[1].position, 1.0);
-    gl_MeshVerticesNV[2].gl_Position = view_projection * vec4(cube_vertices[2].position, 1.0);
+    SetMeshOutputsEXT(3, 1);
+
+    gl_MeshVerticesEXT[0].gl_Position = view_projection * vec4(cube_vertices[0].position, 1.0);
+    gl_MeshVerticesEXT[1].gl_Position = view_projection * vec4(cube_vertices[1].position, 1.0);
+    gl_MeshVerticesEXT[2].gl_Position = view_projection * vec4(cube_vertices[2].position, 1.0);
 
     vertex_out[0].texel_coord = cube_vertices[0].texel_coord;
     vertex_out[1].texel_coord = cube_vertices[1].texel_coord;
     vertex_out[2].texel_coord = cube_vertices[2].texel_coord;
 
-    gl_PrimitiveIndicesNV[0] = 0;
-    gl_PrimitiveIndicesNV[1] = 1;
-    gl_PrimitiveIndicesNV[2] = 2;
-
-    gl_PrimitiveCountNV = 1;
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
 }

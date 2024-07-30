@@ -147,7 +147,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
                     DEFAULT_VK_DESCRIPTOR_BINDING,
                     .binding = 0,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                    .stageFlags = VK_SHADER_STAGE_MESH_BIT_NV
+                    .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT
                 },
                 {
                     DEFAULT_VK_DESCRIPTOR_BINDING,
@@ -185,7 +185,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .pSetLayouts = &pipeline.descriptor_set_layout,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &(VkPushConstantRange) {
-            .stageFlags = VK_SHADER_STAGE_MESH_BIT_NV,
+            .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT,
             .size = sizeof(voxel_push_constants_t)
         }
     }, NULL, &pipeline.pipeline_layout) != VK_SUCCESS) {
@@ -199,7 +199,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .pStages = (VkPipelineShaderStageCreateInfo[2]) {
             {
                 DEFAULT_VK_SHADER_STAGE,
-                .stage = VK_SHADER_STAGE_MESH_BIT_NV,
+                .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
                 .module = mesh_shader_module
             },
             {
@@ -235,13 +235,13 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
     mat4s view_projection = get_view_projection();
-    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_NV, 0, sizeof(voxel_push_constants_t), &view_projection);
+    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(voxel_push_constants_t), &view_projection);
 
     // vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
     
     for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 1, (uint32_t[1]) { i * uniform_stride });
-        vkCmdDrawMeshTasksNV(command_buffer, 1, 0);
+        vkCmdDrawMeshTasksEXT(command_buffer, 1, 1, 1);
         // vkCmdDraw(command_buffer, num_voxel_vertices, 1, 0, 0);
     }
 
