@@ -2,7 +2,7 @@ TARGET := app
 
 GLSLC := glslc
 
-SOURCES := $(wildcard src/*.c) $(wildcard src/gfx/*.c) $(wildcard src/link/*.c) $(wildcard src/link/*.cpp) $(wildcard lib/*.c)
+SOURCES := $(wildcard src/*.c) $(wildcard src/gfx/*.c) $(wildcard src/voxel/*.c) $(wildcard src/link/*.c) $(wildcard src/link/*.cpp) $(wildcard lib/*.c)
 SHADER_SOURCES := $(wildcard shader/*.vert) $(wildcard shader/*.frag) $(wildcard shader/*.comp) $(wildcard shader/*.mesh) $(wildcard shader/*.task)
 LIBS := -lvulkan -lglfw -lm -lpthread
 OBJECTS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCES)))

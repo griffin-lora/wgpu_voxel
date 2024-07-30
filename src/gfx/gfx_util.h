@@ -15,19 +15,6 @@ typedef struct {
 
 result_t create_image(VkCommandBuffer command_buffer, VkFence command_fence, const VkImageCreateInfo* image_create_info, VkDeviceSize num_pixel_bytes, const void* const* pixel_arrays, VkImage* image, VmaAllocation* image_allocation);
 
-typedef struct {
-    enum {
-        descriptor_info_type_buffer,
-        descriptor_info_type_image
-    } type;
-    union {
-        VkDescriptorBufferInfo buffer;
-        VkDescriptorImageInfo image;
-    };
-} descriptor_info_t;
-
-result_t create_descriptor_set(const VkDescriptorSetLayoutCreateInfo* info, descriptor_info_t infos[], VkDescriptorSetLayout* descriptor_set_layout, VkDescriptorPool* descriptor_pool, VkDescriptorSet* descriptor_set);
-
 void begin_pipeline(
     VkCommandBuffer command_buffer,
     VkFramebuffer image_framebuffer, VkExtent2D image_extent,

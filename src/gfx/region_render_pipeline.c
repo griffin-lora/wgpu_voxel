@@ -4,7 +4,6 @@
 #include "gfx/default.h"
 #include "gfx/pipeline.h"
 #include "gfx/gfx_util.h"
-#include "gfx/region_generation_compute_pipeline.h"
 #include "util.h"
 #include "result.h"
 #include "voxel/region_management.h"
@@ -16,6 +15,7 @@
 #include <string.h>
 #include <stb/stb_image.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #define NUM_COLOR_IMAGE_LAYERS 4
 
@@ -27,17 +27,21 @@ static const char* color_image_layer_paths[NUM_COLOR_IMAGE_LAYERS] = {
 };
 
 static pipeline_t pipeline;
-static VkSampler voxel_sampler;
+VkSampler voxel_sampler;
 static VkSampler color_sampler;
 static VkImage color_image;
 static VmaAllocation color_image_allocation;
 static VkImageView color_image_view;
+static VkDescriptorSetLayout descriptor_set_layout;
+static VkDescriptorSet descriptor_set;
 
 typedef struct {
     mat4s view_projection;
 } push_constants_t;
 
-result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence command_fence, const VkPhysicalDeviceProperties* physical_device_properties) {
+VkDescriptorSetLayout region_render_pipeline_set_layout;
+
+result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence command_fence, VkDescriptorPool descriptor_pool, const VkPhysicalDeviceProperties* physical_device_properties) {
     result_t result;
 
     uint32_t texture_size = 16;
@@ -128,66 +132,74 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
         return result;
     }
 
-    if ((result = create_descriptor_set(
-        &(VkDescriptorSetLayoutCreateInfo) {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            
-            .bindingCount = 3,
-            .pBindings = (VkDescriptorSetLayoutBinding[3]) {
-                {
-                    DEFAULT_VK_DESCRIPTOR_BINDING,
-                    .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT
-                },
-                {
-                    DEFAULT_VK_DESCRIPTOR_BINDING,
-                    .binding = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                    .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT
-                },
-                {
-                    DEFAULT_VK_DESCRIPTOR_BINDING,
-                    .binding = 2,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-                }
-            }
-        },
-        (descriptor_info_t[3]) {
+    if (vkCreateDescriptorSetLayout(device, &(VkDescriptorSetLayoutCreateInfo) {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = (VkDescriptorSetLayoutBinding[1]) {
             {
-                .type = descriptor_info_type_image,
-                .image = {
-                    .sampler = voxel_sampler,
-                    .imageView = voxel_image_view,
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                }
+                DEFAULT_VK_DESCRIPTOR_BINDING,
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            }
+        }
+    }, NULL, &descriptor_set_layout) != VK_SUCCESS) {
+        return result_descriptor_set_layout_create_failure;
+    }
+
+    if (vkAllocateDescriptorSets(device, &(VkDescriptorSetAllocateInfo) {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &descriptor_set_layout
+    }, &descriptor_set) != VK_SUCCESS) {
+        return result_descriptor_sets_allocate_failure;
+    }
+    
+    vkUpdateDescriptorSets(device, 1, (VkWriteDescriptorSet[1]) {
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = descriptor_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .pImageInfo = &(VkDescriptorImageInfo) {
+                .sampler = color_sampler,
+                .imageView = color_image_view,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+            }
+        }
+    }, 0, NULL);
+
+    if (vkCreateDescriptorSetLayout(device, &(VkDescriptorSetLayoutCreateInfo) {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 2,
+        .pBindings = (VkDescriptorSetLayoutBinding[2]) {
+            {
+                DEFAULT_VK_DESCRIPTOR_BINDING,
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT
             },
             {
-                .type = descriptor_info_type_buffer,
-                .buffer = {
-                    .buffer = uniform_buffer,
-                    .offset = 0,
-                    .range = uniform_stride
-                }
-            },
-            {
-                .type = descriptor_info_type_image,
-                .image = {
-                    .sampler = color_sampler,
-                    .imageView = color_image_view,
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                }
+                DEFAULT_VK_DESCRIPTOR_BINDING,
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT
             }
-        },
-        &pipeline.descriptor_set_layout, &pipeline.descriptor_pool, &pipeline.descriptor_set
-    )) != result_success) {
-        return result;
+        }
+    }, NULL, &region_render_pipeline_set_layout) != VK_SUCCESS) {
+        return result_descriptor_set_layout_create_failure;
     }
     
     if (vkCreatePipelineLayout(device, &(VkPipelineLayoutCreateInfo) {
         DEFAULT_VK_PIPELINE_LAYOUT,
-        .pSetLayouts = &pipeline.descriptor_set_layout,
+        .setLayoutCount = 2,
+        .pSetLayouts = (VkDescriptorSetLayout[2]) {
+            descriptor_set_layout,
+            region_render_pipeline_set_layout
+        },
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &(VkPushConstantRange) {
             .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT,
@@ -246,7 +258,7 @@ result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
     vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(push_constants_t), &view_projection);
 
     for (uint32_t i = 0; i < NUM_REGIONS; i++) {
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &region_render_pipeline_infos[i].render_descriptor_set, 0, NULL);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 2, (VkDescriptorSet[2]) { region_render_pipeline_infos[i].descriptor_set }, 0, NULL);
         vkCmdDrawMeshTasksEXT(command_buffer, 8, 8, 8);
     }
 
@@ -254,9 +266,10 @@ result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
 }
 
 void term_region_render_pipeline() {
+    destroy_pipeline(&pipeline);
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
     vkDestroyImageView(device, color_image_view, NULL);
     vmaDestroyImage(allocator, color_image, color_image_allocation);
     vkDestroySampler(device, color_sampler, NULL);
     vkDestroySampler(device, voxel_sampler, NULL);
-    destroy_pipeline(&pipeline);
 }

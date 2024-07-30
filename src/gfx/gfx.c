@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -67,8 +68,10 @@ static VmaAllocation depth_image_allocation;
 static VkImageView depth_image_view;
 VkFormat depth_image_format;
 
-VkCommandBuffer generic_command_buffer;
-VkFence generic_command_fence;
+static VkCommandBuffer generic_command_buffer;
+static VkFence generic_command_fence;
+
+static VkDescriptorPool generic_descriptor_pool;
 
 static const char* layers[] = {
     "VK_LAYER_KHRONOS_validation"
@@ -695,19 +698,37 @@ static result_t init_vk_core(void) {
         return result_synchronization_primitive_create_failure;
     }
 
+    if (vkCreateDescriptorPool(device, &(VkDescriptorPoolCreateInfo) {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .poolSizeCount = 1,
+        .pPoolSizes = (VkDescriptorPoolSize[1]) {
+            {
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1
+            }
+        },
+        .maxSets = 1
+    }, NULL, &generic_descriptor_pool) != VK_SUCCESS) {
+        return result_descriptor_pool_create_failure;
+    }
+
     vk_init_proc();
+
+    if ((result = init_region_generation_compute_pipeline()) != result_success) {
+        return result;
+    }
+    
+    if ((result = init_region_render_pipeline(generic_command_buffer, generic_command_fence, generic_descriptor_pool, &physical_device_properties)) != result_success) {
+        return result;
+    }
 
     if ((result = init_region_management()) != result_success) {
         return result;
     }
 
-    if ((result = init_region_generation_compute_pipeline()) != result_success) {
-        return result;
-    }
-
-    if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
-        return result;
-    }
+    // if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
+    //     return result;
+    // }
     if ((result = record_region_generation_compute_pipeline(generic_command_buffer)) != result_success) {
         return result;
     }
@@ -719,19 +740,15 @@ static result_t init_vk_core(void) {
     if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
-    
-    if ((result = init_region_render_pipeline(generic_command_buffer, generic_command_fence, &physical_device_properties)) != result_success) {
-        return result;
-    }
 
     return result_success;
 }
 
 static void term_vk_core(void) {
     vkDeviceWaitIdle(device);
+    term_region_management();
     term_region_render_pipeline();
     term_region_generation_compute_pipeline();
-    term_region_management();
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
     vkDestroyCommandPool(device, command_pool, NULL);

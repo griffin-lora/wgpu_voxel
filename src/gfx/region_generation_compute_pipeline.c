@@ -4,14 +4,16 @@
 #include "gfx/gfx_util.h"
 #include "gfx/pipeline.h"
 #include "result.h"
-#include "voxel/region.h"
 #include "voxel/region_management.h"
 #include <cglm/types-struct.h>
 #include <stdio.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 static pipeline_t pipeline;
+
+VkDescriptorSetLayout region_generation_compute_pipeline_set_layout;
 
 result_t init_region_generation_compute_pipeline(void) {
     result_t result;
@@ -20,37 +22,31 @@ result_t init_region_generation_compute_pipeline(void) {
     if ((result = create_shader_module("shader/region_generation.spv", &shader_module)) != result_success) {
         return result;
     }
-    if ((result = create_descriptor_set(
-        &(VkDescriptorSetLayoutCreateInfo) {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            
-            .bindingCount = 1,
-            .pBindings = (VkDescriptorSetLayoutBinding[1]) {
-                {
-                    DEFAULT_VK_DESCRIPTOR_BINDING,
-                    .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
-                }
-            }
-        },
-        (descriptor_info_t[1]) {
+
+    if (vkCreateDescriptorSetLayout(device, &(VkDescriptorSetLayoutCreateInfo) {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 2,
+        .pBindings = (VkDescriptorSetLayoutBinding[2]) {
             {
-                .type = descriptor_info_type_image,
-                .image = {
-                    .imageView = voxel_image_view,
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL
-                }
+                DEFAULT_VK_DESCRIPTOR_BINDING,
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
+            },
+            {
+                DEFAULT_VK_DESCRIPTOR_BINDING,
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
             }
-        },
-        &pipeline.descriptor_set_layout, &pipeline.descriptor_pool, &pipeline.descriptor_set
-    )) != result_success) {
-        return result;
+        }
+    }, NULL, &region_generation_compute_pipeline_set_layout) != VK_SUCCESS) {
+        return result_descriptor_set_layout_create_failure;
     }
 
     if (vkCreatePipelineLayout(device, &(VkPipelineLayoutCreateInfo) {
         DEFAULT_VK_PIPELINE_LAYOUT,
-        .pSetLayouts = &pipeline.descriptor_set_layout
+        .pSetLayouts = &region_generation_compute_pipeline_set_layout
     }, NULL, &pipeline.pipeline_layout) != VK_SUCCESS) {
         return result_pipeline_layout_create_failure;
     }
@@ -81,7 +77,7 @@ result_t record_region_generation_compute_pipeline(VkCommandBuffer command_buffe
     }
 
     for (size_t i = 0; i < NUM_REGIONS; i++) {
-        const region_generation_compute_pipeline_info_t* info = region_generation_compute_pipeline_infos[i];
+        const region_generation_compute_pipeline_info_t* info = &region_generation_compute_pipeline_infos[i];
 
         vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
             DEFAULT_VK_IMAGE_MEMORY_BARRIER,
@@ -90,7 +86,7 @@ result_t record_region_generation_compute_pipeline(VkCommandBuffer command_buffe
             .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT
         });
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &info->generation_compute_pipeline_descriptor_set, 0, NULL);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &info->descriptor_set, 0, NULL);
 
         vkCmdDispatch(command_buffer, 8, 8, 8);
 
@@ -113,4 +109,6 @@ result_t record_region_generation_compute_pipeline(VkCommandBuffer command_buffe
 
 void term_region_generation_compute_pipeline(void) {
     destroy_pipeline(&pipeline);
+
+    vkDestroyDescriptorSetLayout(device, region_generation_compute_pipeline_set_layout, NULL);
 }
