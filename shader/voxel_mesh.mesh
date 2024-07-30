@@ -1,0 +1,86 @@
+#version 460
+#extension GL_NV_mesh_shader : require
+#include "voxel.glsl"
+
+struct vertex_t {
+    vec3 position;
+    vec2 texel_coord;
+};
+
+vertex_t cube_vertices[NUM_CUBE_VOXEL_VERTICES] = {
+    // +X
+    vertex_t(vec3(1.0, 1.0, -0.0), vec2(1.0, 0.0)),
+    vertex_t(vec3(1.0, 0.0, -0.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(1.0, 0.0, -1.0), vec2(-0.0, 1.0)),
+    vertex_t(vec3(1.0, 1.0, -0.0), vec2(1.0, 0.0)),
+    vertex_t(vec3(1.0, 0.0, -1.0), vec2(-0.0, 1.0)),
+    vertex_t(vec3(1.0, 1.0, -1.0), vec2(0.0, 0.0)),
+    // -X
+    vertex_t(vec3(0.0, 0.0, -0.0), vec2(-0.0, 1.0)),
+    vertex_t(vec3(-0.0, 1.0, -0.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(-0.0, 1.0, -1.0), vec2(1.0, 0.0)),
+    vertex_t(vec3(0.0, 0.0, -0.0), vec2(-0.0, 1.0)),
+    vertex_t(vec3(-0.0, 1.0, -1.0), vec2(1.0, 0.0)),
+    vertex_t(vec3(0.0, 0.0, -1.0), vec2(1.0, 1.0)),
+    // +Y
+    vertex_t(vec3(0.0, 1.0, -0.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(1.0, 1.0, -0.0), vec2(1.0, 0.0)),
+    vertex_t(vec3(1.0, 1.0, -1.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(0.0, 1.0, -0.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(1.0, 1.0, -1.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(0.0, 1.0, -1.0), vec2(0.0, 1.0)),
+    // -Y
+    vertex_t(vec3(0.0, 0.0, -1.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(1.0, 0.0, -1.0), vec2(1.0, 0.0)),
+    vertex_t(vec3(1.0, -0.0, -0.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(0.0, 0.0, -1.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(1.0, -0.0, -0.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(0.0, -0.0, -0.0), vec2(0.0, 1.0)),
+    // +Z
+    vertex_t(vec3(0.0, 0.0, -0.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(1.0, 0.0, -0.0), vec2(0.0, 1.0)),
+    vertex_t(vec3(1.0, 1.0, 0.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(0.0, 0.0, -0.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(1.0, 1.0, 0.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0)),
+    // -Z
+    vertex_t(vec3(0.0, 1.0, -1.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(1.0, 1.0, -1.0), vec2(1.0, 0.0)),
+    vertex_t(vec3(1.0, 0.0, -1.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(0.0, 1.0, -1.0), vec2(0.0, 0.0)),
+    vertex_t(vec3(1.0, 0.0, -1.0), vec2(1.0, 1.0)),
+    vertex_t(vec3(0.0, 0.0, -1.0), vec2(0.0, 1.0))
+};
+
+
+layout(local_size_x = 1) in;
+
+layout(triangles, max_vertices = 64, max_primitives = 126) out;
+
+layout(push_constant, std430) uniform voxel_push_constants_t {
+    mat4 view_projection;
+};
+
+layout(set = 0, binding = 0) uniform voxel_uniform_t {
+    vec3 region_position;
+};
+
+layout(location = 0) out vertex_out_t {
+    vec2 texel_coord;
+} vertex_out[];
+
+void main() {
+    gl_MeshVerticesNV[0].gl_Position = view_projection * vec4(cube_vertices[0].position, 1.0);
+    gl_MeshVerticesNV[1].gl_Position = view_projection * vec4(cube_vertices[1].position, 1.0);
+    gl_MeshVerticesNV[2].gl_Position = view_projection * vec4(cube_vertices[2].position, 1.0);
+
+    vertex_out[0].texel_coord = cube_vertices[0].texel_coord;
+    vertex_out[1].texel_coord = cube_vertices[1].texel_coord;
+    vertex_out[2].texel_coord = cube_vertices[2].texel_coord;
+
+    gl_PrimitiveIndicesNV[0] = 0;
+    gl_PrimitiveIndicesNV[1] = 1;
+    gl_PrimitiveIndicesNV[2] = 2;
+
+    gl_PrimitiveCountNV = 1;
+}

@@ -7,6 +7,7 @@
 #include "gfx/voxel_render_pipeline.h"
 #include "result.h"
 #include "util.h"
+#include "vk_init.h"
 #include <GLFW/glfw3.h>
 #include <cglm/types-struct.h>
 #include <stdio.h>
@@ -76,8 +77,8 @@ static const char* layers[] = {
 
 static const char* extensions[] = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_EXT_MESH_SHADER_EXTENSION_NAME,
-    VK_KHR_SPIRV_1_4_EXTENSION_NAME
+    VK_NV_MESH_SHADER_EXTENSION_NAME,
+    // VK_KHR_SPIRV_1_4_EXTENSION_NAME
 };
 
 static result_t check_layers(void) {
@@ -500,6 +501,17 @@ static result_t init_vk_core(void) {
 
     if (vkCreateDevice(physical_device, &(VkDeviceCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &(VkPhysicalDeviceFeatures2) {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .features = {
+                .samplerAnisotropy = VK_TRUE
+            },
+            .pNext = &(VkPhysicalDeviceMeshShaderFeaturesNV) {
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV,
+                .taskShader = true,
+                .meshShader = true
+            }
+        },
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = (VkDeviceQueueCreateInfo[1]) {
             {
@@ -509,9 +521,7 @@ static result_t init_vk_core(void) {
                 .pQueuePriorities = (float[1]) { 1.0f }
             }
         },
-        .pEnabledFeatures = &(VkPhysicalDeviceFeatures) {
-            .samplerAnisotropy = VK_TRUE
-        },
+        .pEnabledFeatures = NULL,
 
         .enabledExtensionCount = NUM_ELEMS(extensions),
         .ppEnabledExtensionNames = extensions,
@@ -676,6 +686,8 @@ static result_t init_vk_core(void) {
     }, NULL, &generic_command_fence) != VK_SUCCESS) {
         return result_synchronization_primitive_create_failure;
     }
+
+    vk_init_proc();
 
     if ((result = init_voxel_render_pipeline(generic_command_buffer, generic_command_fence, &physical_device_properties)) != result_success) {
         return result;

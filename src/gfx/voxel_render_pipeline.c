@@ -16,6 +16,7 @@
 #include <string.h>
 #include <stb/stb_image.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #define NUM_VOXEL_TEXTURE_LAYERS 4
 
@@ -127,8 +128,8 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         return result_memory_map_failure;
     }
     
-    VkShaderModule vertex_shader_module;
-    if ((result = create_shader_module("shader/voxel_vertex.spv", &vertex_shader_module)) != result_success) {
+    VkShaderModule mesh_shader_module;
+    if ((result = create_shader_module("shader/voxel_mesh.spv", &mesh_shader_module)) != result_success) {
         return result;
     }
     VkShaderModule fragment_shader_module;
@@ -146,7 +147,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
                     DEFAULT_VK_DESCRIPTOR_BINDING,
                     .binding = 0,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+                    .stageFlags = VK_SHADER_STAGE_MESH_BIT_NV
                 },
                 {
                     DEFAULT_VK_DESCRIPTOR_BINDING,
@@ -184,7 +185,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .pSetLayouts = &pipeline.descriptor_set_layout,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &(VkPushConstantRange) {
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .stageFlags = VK_SHADER_STAGE_MESH_BIT_NV,
             .size = sizeof(voxel_push_constants_t)
         }
     }, NULL, &pipeline.pipeline_layout) != VK_SUCCESS) {
@@ -198,8 +199,8 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .pStages = (VkPipelineShaderStageCreateInfo[2]) {
             {
                 DEFAULT_VK_SHADER_STAGE,
-                .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                .module = vertex_shader_module
+                .stage = VK_SHADER_STAGE_MESH_BIT_NV,
+                .module = mesh_shader_module
             },
             {
                 DEFAULT_VK_SHADER_STAGE,
@@ -208,40 +209,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
             }
         },
 
-        .pVertexInputState = &(VkPipelineVertexInputStateCreateInfo) {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        
-            .vertexBindingDescriptionCount = 1,
-            .pVertexBindingDescriptions = (VkVertexInputBindingDescription[1]) {
-                {
-                    .binding = 0,
-                    .stride = sizeof(voxel_vertex_t),
-                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
-                }
-            },
-
-            .vertexAttributeDescriptionCount = 3,
-            .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[3]) {
-                {
-                    .binding = 0,
-                    .location = 0,
-                    .format = VK_FORMAT_R32G32B32_SFLOAT,
-                    .offset = offsetof(voxel_vertex_t, vertex_position)
-                },
-                {
-                    .binding = 0,
-                    .location = 1,
-                    .format = VK_FORMAT_R32_UINT,
-                    .offset = offsetof(voxel_vertex_t, vertex_index)
-                },
-                {
-                    .binding = 0,
-                    .location = 2,
-                    .format = VK_FORMAT_R32_UINT,
-                    .offset = offsetof(voxel_vertex_t, voxel_type)
-                }
-            }
-        },
+        .pVertexInputState = NULL,
         .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo) { DEFAULT_VK_RASTERIZATION },
         .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo) {
             DEFAULT_VK_MULTISAMPLE,
@@ -253,7 +221,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         return result_graphics_pipelines_create_failure;
     }
 
-    vkDestroyShaderModule(device, vertex_shader_module, NULL);
+    vkDestroyShaderModule(device, mesh_shader_module, NULL);
     vkDestroyShaderModule(device, fragment_shader_module, NULL);
     
     ((voxel_uniform_t*) (uniforms_mapped + (0 * uniform_stride)))->region_position = (vec3s) {{ 0.0f, 0.0f, 0.0f }};
@@ -267,13 +235,14 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
     mat4s view_projection = get_view_projection();
-    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(voxel_push_constants_t), &view_projection);
+    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_NV, 0, sizeof(voxel_push_constants_t), &view_projection);
 
-    vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
+    // vkCmdBindVertexBuffers(command_buffer, 0, 1, &voxel_vertex_buffer, (VkDeviceSize[1]) { 0 });
     
     for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 1, (uint32_t[1]) { i * uniform_stride });
-        vkCmdDraw(command_buffer, num_voxel_vertices, 1, 0, 0);
+        vkCmdDrawMeshTasksNV(command_buffer, 1, 0);
+        // vkCmdDraw(command_buffer, num_voxel_vertices, 1, 0, 0);
     }
 
     return result_success;

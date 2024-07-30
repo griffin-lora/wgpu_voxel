@@ -3,11 +3,11 @@ TARGET := app
 GLSLC := glslc
 
 SOURCES := $(wildcard src/*.c) $(wildcard src/gfx/*.c) $(wildcard src/link/*.c) $(wildcard src/link/*.cpp) $(wildcard lib/*.c)
-SHADER_SOURCES := $(wildcard shader/*.vert) $(wildcard shader/*.frag) $(wildcard shader/*.comp)
+SHADER_SOURCES := $(wildcard shader/*.vert) $(wildcard shader/*.frag) $(wildcard shader/*.comp) $(wildcard shader/*.mesh)
 LIBS := -lvulkan -lglfw -lm -lpthread
 OBJECTS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCES)))
 DEPENDS := $(patsubst %.c,%.d,$(patsubst %.cpp,%.d,$(SOURCES)))
-SHADER_OBJECTS := $(patsubst %.vert,%.spv,$(patsubst %.frag,%.spv,$(patsubst %.comp,%.spv,$(SHADER_SOURCES))))
+SHADER_OBJECTS := $(patsubst %.vert,%.spv,$(patsubst %.frag,%.spv,$(patsubst %.comp,%.spv,$(patsubst %.mesh,%.spv,$(SHADER_SOURCES)))))
 
 CFLAGS = -O2 -std=c2x -Wall -Wextra -Wpedantic -Wconversion -Wno-override-init -Wno-pointer-arith -Werror -Wfatal-errors -g -Isrc -Ilib -DGLFW_INCLUDE_VULKAN -DCGLM_FORCE_DEPTH_ZERO_TO_ONE
 CXXFLAGS = -O2 -Isrc -Ilib
@@ -38,4 +38,7 @@ clean:
 	$(GLSLC) $< -o $@
 
 %.spv: %.comp Makefile
+	$(GLSLC) $< -o $@
+
+%.spv: %.mesh Makefile
 	$(GLSLC) $< -o $@
