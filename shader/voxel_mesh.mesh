@@ -61,7 +61,7 @@ layout(push_constant, std430) uniform voxel_push_constants_t {
     mat4 view_projection;
 };
 
-layout(set = 0, binding = 0, r32ui) readonly uniform uimage3D voxel_image;
+layout(set = 0, binding = 0) uniform usampler3D voxel_sampler;
 
 layout(set = 0, binding = 1) uniform voxel_uniform_t {
     vec3 region_position;
@@ -104,7 +104,7 @@ void main() {
     // TODO: Implement correctly maybe??
     SetMeshOutputsEXT(64, 126);
 
-    uint voxel_type = imageLoad(voxel_image, ivec3(gl_GlobalInvocationID)).x;
+    uint voxel_type = texelFetch(voxel_sampler, ivec3(gl_GlobalInvocationID), 0).x;
 
     uint triangle_index = gl_LocalInvocationIndex * 2;
     vec3 voxel_position = vec3(gl_GlobalInvocationID);
@@ -119,12 +119,12 @@ void main() {
         return;
     }
 
-    float px_visible = float(imageLoad(voxel_image, ivec3(gl_GlobalInvocationID) + ivec3(1, 0, 0)).x == 0);
-    float nx_visible = float(imageLoad(voxel_image, ivec3(gl_GlobalInvocationID) - ivec3(1, 0, 0)).x == 0);
-    float py_visible = float(imageLoad(voxel_image, ivec3(gl_GlobalInvocationID) + ivec3(0, 1, 0)).x == 0);
-    float ny_visible = float(imageLoad(voxel_image, ivec3(gl_GlobalInvocationID) - ivec3(0, 1, 0)).x == 0);
-    float pz_visible = float(imageLoad(voxel_image, ivec3(gl_GlobalInvocationID) + ivec3(0, 0, 1)).x == 0);
-    float nz_visible = float(imageLoad(voxel_image, ivec3(gl_GlobalInvocationID) - ivec3(0, 0, 1)).x == 0);
+    float px_visible = float(texelFetch(voxel_sampler, ivec3(gl_GlobalInvocationID) + ivec3(1, 0, 0), 0).x == 0);
+    float nx_visible = float(texelFetch(voxel_sampler, ivec3(gl_GlobalInvocationID) - ivec3(1, 0, 0), 0).x == 0);
+    float py_visible = float(texelFetch(voxel_sampler, ivec3(gl_GlobalInvocationID) + ivec3(0, 1, 0), 0).x == 0);
+    float ny_visible = float(texelFetch(voxel_sampler, ivec3(gl_GlobalInvocationID) - ivec3(0, 1, 0), 0).x == 0);
+    float pz_visible = float(texelFetch(voxel_sampler, ivec3(gl_GlobalInvocationID) + ivec3(0, 0, 1), 0).x == 0);
+    float nz_visible = float(texelFetch(voxel_sampler, ivec3(gl_GlobalInvocationID) - ivec3(0, 0, 1), 0).x == 0);
 
     add_face_vertices(triangle_index, voxel_position, VOXEL_PX_FACE_INDEX, voxel_type, px_visible);
     add_face_vertices(triangle_index + 2, voxel_position, VOXEL_NX_FACE_INDEX, voxel_type, nx_visible);

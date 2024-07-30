@@ -30,10 +30,11 @@ static const char* voxel_texture_layer_paths[NUM_VOXEL_TEXTURE_LAYERS] = {
 static pipeline_t pipeline;
 static VkBuffer uniform_buffer;
 static VmaAllocation uniform_buffer_allocation;
-static VkSampler sampler;
-static VkImage image;
-static VmaAllocation image_allocation;
-static VkImageView image_view;
+static VkSampler voxel_sampler;
+static VkSampler color_sampler;
+static VkImage color_image;
+static VmaAllocation color_image_allocation;
+static VkImageView color_image_view;
 
 typedef struct {
     mat4s view_projection;
@@ -75,7 +76,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .extent = { texture_size, texture_size, 1 },
         .mipLevels = num_mip_levels,
         .arrayLayers = NUM_VOXEL_TEXTURE_LAYERS
-    }, 4, pixel_arrays, &image, &image_allocation)) != result_success) {
+    }, 4, pixel_arrays, &color_image, &color_image_allocation)) != result_success) {
         return result;
     }
 
@@ -85,7 +86,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
 
     if (vkCreateImageView(device, &(VkImageViewCreateInfo) {
         DEFAULT_VK_IMAGE_VIEW,
-        .image = image,
+        .image = color_image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
         .format = VK_FORMAT_R8G8B8A8_SRGB,
         .subresourceRange = {
@@ -93,7 +94,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
             .layerCount = NUM_VOXEL_TEXTURE_LAYERS,
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
         }
-    }, NULL, &image_view) != VK_SUCCESS) {
+    }, NULL, &color_image_view) != VK_SUCCESS) {
         return result_image_view_create_failure;
     }
 
@@ -106,7 +107,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .magFilter = VK_FILTER_NEAREST,
         .anisotropyEnable = VK_FALSE,
         .maxLod = (float)num_mip_levels
-    }, NULL, &sampler) != VK_SUCCESS) {
+    }, NULL, &color_sampler) != VK_SUCCESS) {
         return result_sampler_create_failure;
     }
 
@@ -123,6 +124,22 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
 
     if (vmaMapMemory(allocator, uniform_buffer_allocation, &uniforms_mapped) != VK_SUCCESS) {
         return result_memory_map_failure;
+    }
+
+    if (vkCreateSampler(device, &(VkSamplerCreateInfo) {
+        DEFAULT_VK_SAMPLER,
+        .maxAnisotropy = physical_device_properties->limits.maxSamplerAnisotropy,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .unnormalizedCoordinates = VK_TRUE,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+        .magFilter = VK_FILTER_NEAREST,
+        .anisotropyEnable = VK_FALSE,
+        .maxLod = 0.0f
+    }, NULL, &voxel_sampler) != VK_SUCCESS) {
+        return result_sampler_create_failure;
     }
     
     VkShaderModule mesh_shader_module;
@@ -143,7 +160,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
                 {
                     DEFAULT_VK_DESCRIPTOR_BINDING,
                     .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT
                 },
                 {
@@ -164,8 +181,9 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
             {
                 .type = descriptor_info_type_image,
                 .image = {
+                    .sampler = voxel_sampler,
                     .imageView = voxel_image_view,
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 }
             },
             {
@@ -179,8 +197,8 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
             {
                 .type = descriptor_info_type_image,
                 .image = {
-                    .sampler = sampler,
-                    .imageView = image_view,
+                    .sampler = color_sampler,
+                    .imageView = color_image_view,
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 }
             }
@@ -259,9 +277,10 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
 void term_voxel_render_pipeline() {
     vmaUnmapMemory(allocator, uniform_buffer_allocation);
 
-    vkDestroyImageView(device, image_view, NULL);
-    vmaDestroyImage(allocator, image, image_allocation);
-    vkDestroySampler(device, sampler, NULL);
+    vkDestroyImageView(device, color_image_view, NULL);
+    vmaDestroyImage(allocator, color_image, color_image_allocation);
+    vkDestroySampler(device, color_sampler, NULL);
     vmaDestroyBuffer(allocator, uniform_buffer, uniform_buffer_allocation);
+    vkDestroySampler(device, voxel_sampler, NULL);
     destroy_pipeline(&pipeline);
 }

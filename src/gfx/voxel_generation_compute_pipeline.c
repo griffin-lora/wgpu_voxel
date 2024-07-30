@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 static pipeline_t pipeline;
 static VkImage voxel_image;
@@ -20,7 +21,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
     if (vmaCreateImage(allocator, &(VkImageCreateInfo) {
         DEFAULT_VK_IMAGE,
         .imageType = VK_IMAGE_TYPE_3D,
-        .format = VK_FORMAT_R32_UINT,
+        .format = VK_FORMAT_R8_UINT,
         .extent = { VOXEL_REGION_SIZE, VOXEL_REGION_SIZE, VOXEL_REGION_SIZE },
         .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
     }, &device_allocation_create_info, &voxel_image, &voxel_image_allocation, NULL) != VK_SUCCESS) {
@@ -31,7 +32,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
         DEFAULT_VK_IMAGE_VIEW,
         .image = voxel_image,
         .viewType = VK_IMAGE_VIEW_TYPE_3D,
-        .format = VK_FORMAT_R32_UINT,
+        .format = VK_FORMAT_R8_UINT,
         .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
     }, NULL, &voxel_image_view) != VK_SUCCESS) {
         return result_image_view_create_failure;
@@ -105,12 +106,21 @@ result_t record_voxel_generation_compute_pipeline(VkCommandBuffer command_buffer
         DEFAULT_VK_IMAGE_MEMORY_BARRIER,
         .image = voxel_image,
         .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
+        .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT
     });
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 0, NULL);
 
     vkCmdDispatch(command_buffer, 8, 8, 8);
+
+    vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
+        DEFAULT_VK_IMAGE_MEMORY_BARRIER,
+        .image = voxel_image,
+        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+    });
 
     if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
         return result_command_buffer_end_failure;
