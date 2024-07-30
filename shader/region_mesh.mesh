@@ -65,21 +65,21 @@ layout(local_size_x = 2, local_size_y = 2, local_size_z = 2) in;
 
 layout(triangles, max_vertices = 256, max_primitives = 126) out;
 
-layout(push_constant, std430) uniform voxel_push_constants_t {
+layout(push_constant, std430) uniform push_constants_t {
     mat4 view_projection;
 };
 
 layout(set = 0, binding = 0) uniform usampler3D voxel_sampler;
 
-layout(set = 0, binding = 1) uniform voxel_uniform_t {
+layout(set = 0, binding = 1) uniform uniform_t {
     vec3 region_position;
 };
 
 taskPayloadSharedEXT uvec3 task_position;
 
-layout(location = 0) out vertex_out_t {
+layout(location = 0) out out_vertex_t {
     vec3 vertex_texel_coord;
-} mesh_vertices[];
+} out_vertices[];
 
 float get_layer_index(uint face_index, uint voxel_type) {
     switch (voxel_type) {
@@ -127,7 +127,7 @@ void main() {
             vertex_t vertex = cube_vertices[cube_vertex_index];
 
             gl_MeshVerticesEXT[vertex_index + cube_vertex_index].gl_Position = view_projection * voxel_scalars[face_index] * vec4(region_position + voxel_vertex_position + vertex.position, 1.0);
-            mesh_vertices[vertex_index + cube_vertex_index].vertex_texel_coord = vec3(vertex.texel_coord, get_layer_index(face_index, voxel_type));
+            out_vertices[vertex_index + cube_vertex_index].vertex_texel_coord = vec3(vertex.texel_coord, get_layer_index(face_index, voxel_type));
         }
     }
     

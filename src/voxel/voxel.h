@@ -1,8 +1,6 @@
 #ifndef VOXEL_H
 #define VOXEL_H
 
-#define VOXEL_REGION_SIZE 16u
-
 #define VOXEL_PX_FACE_INDEX 0
 #define VOXEL_NX_FACE_INDEX 1
 #define VOXEL_PY_FACE_INDEX 2

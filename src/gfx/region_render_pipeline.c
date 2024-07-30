@@ -1,13 +1,12 @@
-#include "voxel_render_pipeline.h"
+#include "region_render_pipeline.h"
 #include "camera.h"
 #include "gfx.h"
 #include "gfx/default.h"
 #include "gfx/pipeline.h"
 #include "gfx/gfx_util.h"
-#include "gfx/voxel_generation_compute_pipeline.h"
+#include "gfx/region_generation_compute_pipeline.h"
 #include "util.h"
 #include "result.h"
-#include "voxel.h"
 #include <cglm/types-struct.h>
 #include <math.h>
 #include <stdint.h>
@@ -16,11 +15,10 @@
 #include <string.h>
 #include <stb/stb_image.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 
-#define NUM_VOXEL_TEXTURE_LAYERS 4
+#define NUM_COLOR_IMAGE_LAYERS 4
 
-static const char* voxel_texture_layer_paths[NUM_VOXEL_TEXTURE_LAYERS] = {
+static const char* color_image_layer_paths[NUM_COLOR_IMAGE_LAYERS] = {
     "image/cube_voxel_0.png",
     "image/cube_voxel_1.png",
     "image/cube_voxel_2.png",
@@ -38,30 +36,30 @@ static VkImageView color_image_view;
 
 typedef struct {
     mat4s view_projection;
-} voxel_push_constants_t;
+} push_constants_t;
 
 typedef struct {
     vec3s region_position;
-} voxel_uniform_t;
+} uniform_t;
 
 #define NUM_UNIFORMS 16
 
 static void* uniforms_mapped;
 static uint32_t uniform_stride;
 
-result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence command_fence, const VkPhysicalDeviceProperties* physical_device_properties) {
+result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence command_fence, const VkPhysicalDeviceProperties* physical_device_properties) {
     result_t result;
 
     uint32_t texture_size = 16;
     uint32_t num_mip_levels = ((uint32_t)floorf(log2f((float)max_uint32(texture_size, texture_size)))) + 1;
 
-    const void* pixel_arrays[NUM_VOXEL_TEXTURE_LAYERS];
+    const void* pixel_arrays[NUM_COLOR_IMAGE_LAYERS];
 
-    for (uint32_t layer_index = 0; layer_index < NUM_VOXEL_TEXTURE_LAYERS; layer_index++) {
+    for (uint32_t layer_index = 0; layer_index < NUM_COLOR_IMAGE_LAYERS; layer_index++) {
         int32_t width;
         int32_t height;
 
-        const void* pixels = stbi_load(voxel_texture_layer_paths[layer_index], &width, &height, (int[1]) { 0 }, STBI_rgb_alpha);
+        const void* pixels = stbi_load(color_image_layer_paths[layer_index], &width, &height, (int[1]) { 0 }, STBI_rgb_alpha);
 
         if (pixels == NULL || width != height || width != (int32_t) texture_size) {
             return result_file_read_failure; // TODO: Use a different error
@@ -75,12 +73,12 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .format = VK_FORMAT_R8G8B8A8_SRGB,
         .extent = { texture_size, texture_size, 1 },
         .mipLevels = num_mip_levels,
-        .arrayLayers = NUM_VOXEL_TEXTURE_LAYERS
+        .arrayLayers = NUM_COLOR_IMAGE_LAYERS
     }, 4, pixel_arrays, &color_image, &color_image_allocation)) != result_success) {
         return result;
     }
 
-    for (uint32_t layer_index = 0; layer_index < NUM_VOXEL_TEXTURE_LAYERS; layer_index++) {
+    for (uint32_t layer_index = 0; layer_index < NUM_COLOR_IMAGE_LAYERS; layer_index++) {
         stbi_image_free((void*) pixel_arrays[layer_index]);
     }
 
@@ -91,7 +89,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .format = VK_FORMAT_R8G8B8A8_SRGB,
         .subresourceRange = {
             .levelCount = num_mip_levels,
-            .layerCount = NUM_VOXEL_TEXTURE_LAYERS,
+            .layerCount = NUM_COLOR_IMAGE_LAYERS,
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT
         }
     }, NULL, &color_image_view) != VK_SUCCESS) {
@@ -111,7 +109,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         return result_sampler_create_failure;
     }
 
-    uniform_stride = ceil_to_next_multiple(sizeof(voxel_uniform_t), (uint32_t)physical_device_properties->limits.minUniformBufferOffsetAlignment);
+    uniform_stride = ceil_to_next_multiple(sizeof(uniform_t), (uint32_t)physical_device_properties->limits.minUniformBufferOffsetAlignment);
 
     uint32_t uniforms_num_bytes = NUM_UNIFORMS * uniform_stride;
 
@@ -143,15 +141,15 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
     }
     
     VkShaderModule task_shader_module;
-    if ((result = create_shader_module("shader/voxel_task.spv", &task_shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/region_task.spv", &task_shader_module)) != result_success) {
         return result;
     }
     VkShaderModule mesh_shader_module;
-    if ((result = create_shader_module("shader/voxel_mesh.spv", &mesh_shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/region_mesh.spv", &mesh_shader_module)) != result_success) {
         return result;
     }
     VkShaderModule fragment_shader_module;
-    if ((result = create_shader_module("shader/voxel_fragment.spv", &fragment_shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/region_fragment.spv", &fragment_shader_module)) != result_success) {
         return result;
     }
 
@@ -218,7 +216,7 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &(VkPushConstantRange) {
             .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT,
-            .size = sizeof(voxel_push_constants_t)
+            .size = sizeof(push_constants_t)
         }
     }, NULL, &pipeline.pipeline_layout) != VK_SUCCESS) {
         return result_pipeline_layout_create_failure;
@@ -263,18 +261,18 @@ result_t init_voxel_render_pipeline(VkCommandBuffer command_buffer, VkFence comm
     vkDestroyShaderModule(device, fragment_shader_module, NULL);
 
     for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
-        ((voxel_uniform_t*) (uniforms_mapped + (i * uniform_stride)))->region_position = (vec3s) {{ 16.0f * (float) i, 0.0f, 0.0f }};
+        ((uniform_t*) (uniforms_mapped + (i * uniform_stride)))->region_position = (vec3s) {{ 16.0f * (float) i, 0.0f, 0.0f }};
     }
 
     return result_success;
 }
 
-result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
+result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
     mat4s view_projection = get_view_projection();
-    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(voxel_push_constants_t), &view_projection);
+    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(push_constants_t), &view_projection);
 
     for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 1, (uint32_t[1]) { i * uniform_stride });
@@ -284,7 +282,7 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
     return result_success;
 }
 
-void term_voxel_render_pipeline() {
+void term_region_render_pipeline() {
     vmaUnmapMemory(allocator, uniform_buffer_allocation);
 
     vkDestroyImageView(device, color_image_view, NULL);

@@ -1,1 +1,1 @@
-#include "../src/voxel.h"
+#include "../src/voxel/voxel.h"

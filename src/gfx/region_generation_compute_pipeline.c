@@ -1,28 +1,27 @@
-#include "voxel_generation_compute_pipeline.h"
+#include "region_generation_compute_pipeline.h"
 #include "gfx/default.h"
 #include "gfx/gfx.h"
 #include "gfx/gfx_util.h"
 #include "gfx/pipeline.h"
 #include "result.h"
-#include "voxel.h"
+#include "voxel/region.h"
 #include <stdio.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 static pipeline_t pipeline;
 static VkImage voxel_image;
 static VmaAllocation voxel_image_allocation;
 VkImageView voxel_image_view;
 
-result_t init_voxel_generation_compute_pipeline(void) {
+result_t init_region_generation_compute_pipeline(void) {
     result_t result;
 
     if (vmaCreateImage(allocator, &(VkImageCreateInfo) {
         DEFAULT_VK_IMAGE,
         .imageType = VK_IMAGE_TYPE_3D,
         .format = VK_FORMAT_R8_UINT,
-        .extent = { VOXEL_REGION_SIZE, VOXEL_REGION_SIZE, VOXEL_REGION_SIZE },
+        .extent = { REGION_SIZE, REGION_SIZE, REGION_SIZE },
         .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
     }, &device_allocation_create_info, &voxel_image, &voxel_image_allocation, NULL) != VK_SUCCESS) {
         return result_image_create_failure;
@@ -39,7 +38,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
     }
 
     VkShaderModule shader_module;
-    if ((result = create_shader_module("shader/voxel_generation.spv", &shader_module)) != result_success) {
+    if ((result = create_shader_module("shader/region_generation.spv", &shader_module)) != result_success) {
         return result;
     }
     if ((result = create_descriptor_set(
@@ -94,7 +93,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
     return result_success;
 }
 
-result_t record_voxel_generation_compute_pipeline(VkCommandBuffer command_buffer) {
+result_t record_region_generation_compute_pipeline(VkCommandBuffer command_buffer) {
     if (vkBeginCommandBuffer(command_buffer, &(VkCommandBufferBeginInfo) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
@@ -129,7 +128,7 @@ result_t record_voxel_generation_compute_pipeline(VkCommandBuffer command_buffer
     return result_success;
 }
 
-void term_voxel_generation_compute_pipeline(void) {
+void term_region_generation_compute_pipeline(void) {
     destroy_pipeline(&pipeline);
     vkDestroyImageView(device, voxel_image_view, NULL);
     vmaDestroyImage(allocator, voxel_image, voxel_image_allocation);

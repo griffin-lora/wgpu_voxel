@@ -2,8 +2,8 @@
 #include "chrono.h"
 #include "gfx/default.h"
 #include "gfx/gfx_util.h"
-#include "gfx/voxel_generation_compute_pipeline.h"
-#include "gfx/voxel_render_pipeline.h"
+#include "gfx/region_generation_compute_pipeline.h"
+#include "gfx/region_render_pipeline.h"
 #include "result.h"
 #include "util.h"
 #include "vk_init.h"
@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -697,14 +696,14 @@ static result_t init_vk_core(void) {
 
     vk_init_proc();
 
-    if ((result = init_voxel_generation_compute_pipeline()) != result_success) {
+    if ((result = init_region_generation_compute_pipeline()) != result_success) {
         return result;
     }
 
     if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
-    if ((result = record_voxel_generation_compute_pipeline(generic_command_buffer)) != result_success) {
+    if ((result = record_region_generation_compute_pipeline(generic_command_buffer)) != result_success) {
         return result;
     }
     microseconds_t start = get_current_microseconds();
@@ -716,7 +715,7 @@ static result_t init_vk_core(void) {
         return result;
     }
     
-    if ((result = init_voxel_render_pipeline(generic_command_buffer, generic_command_fence, &physical_device_properties)) != result_success) {
+    if ((result = init_region_render_pipeline(generic_command_buffer, generic_command_fence, &physical_device_properties)) != result_success) {
         return result;
     }
 
@@ -725,8 +724,8 @@ static result_t init_vk_core(void) {
 
 static void term_vk_core(void) {
     vkDeviceWaitIdle(device);
-    term_voxel_render_pipeline();
-    term_voxel_generation_compute_pipeline();
+    term_region_render_pipeline();
+    term_region_generation_compute_pipeline();
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
     vkDestroyCommandPool(device, command_pool, NULL);
@@ -837,7 +836,7 @@ result_t draw_gfx(void) {
         }
     }, VK_SUBPASS_CONTENTS_INLINE);
 
-    if ((result = draw_voxel_render_pipeline(command_buffer)) != result_success) {
+    if ((result = draw_region_render_pipeline(command_buffer)) != result_success) {
         return result;
     }
 
