@@ -62,9 +62,9 @@ uvec3 cube_triangles[NUM_CUBE_VOXEL_FACES * NUM_CUBE_VOXEL_FACE_TRIANGLES] = {
 };
 
 // Hope and pray
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 2, local_size_y = 2, local_size_z = 2) in;
 
-layout(triangles, max_vertices = 64, max_primitives = 126) out;
+layout(triangles, max_vertices = 256, max_primitives = 126) out;
 
 layout(push_constant, std430) uniform voxel_push_constants_t {
     mat4 view_projection;
@@ -94,8 +94,10 @@ float get_layer_index(uint face_index, uint voxel_type) {
 }
 
 void main() {
-    // TODO: Implement correctly maybe??
-    SetMeshOutputsEXT(NUM_CUBE_VOXEL_FACES * NUM_CUBE_VOXEL_FACE_VERTICES, NUM_CUBE_VOXEL_FACES * NUM_CUBE_VOXEL_FACE_TRIANGLES);
+    SetMeshOutputsEXT(
+        gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z * NUM_CUBE_VOXEL_FACES * NUM_CUBE_VOXEL_FACE_VERTICES,
+        gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z * NUM_CUBE_VOXEL_FACES * NUM_CUBE_VOXEL_FACE_TRIANGLES
+    );
 
     uint voxel_type = texelFetch(voxel_sampler, ivec3(gl_GlobalInvocationID), 0).x;
     float voxel_scalar = float(voxel_type != 0);
@@ -127,6 +129,6 @@ void main() {
     uint triangle_index = gl_LocalInvocationIndex * NUM_CUBE_VOXEL_FACES * NUM_CUBE_VOXEL_FACE_TRIANGLES;
 
     for (uint i = 0; i < NUM_CUBE_VOXEL_FACES * NUM_CUBE_VOXEL_FACE_TRIANGLES; i++) {
-        gl_PrimitiveTriangleIndicesEXT[triangle_index + i] = cube_triangles[i];
+        gl_PrimitiveTriangleIndicesEXT[triangle_index + i] = uvec3(vertex_index) + cube_triangles[i];
     }
 }

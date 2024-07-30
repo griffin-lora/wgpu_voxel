@@ -268,7 +268,7 @@ result_t draw_voxel_render_pipeline(VkCommandBuffer command_buffer) {
 
     for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 1, (uint32_t[1]) { i * uniform_stride });
-        vkCmdDrawMeshTasksEXT(command_buffer, 16, 16, 16);
+        vkCmdDrawMeshTasksEXT(command_buffer, 8, 8, 8);
     }
 
     return result_success;
