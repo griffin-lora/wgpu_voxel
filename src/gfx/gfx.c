@@ -496,6 +496,7 @@ static result_t init_vk_core(void) {
     VkPhysicalDeviceProperties physical_device_properties;
     vkGetPhysicalDeviceProperties(physical_device, &physical_device_properties);
     printf("Loaded physical device \"%s\"\n", physical_device_properties.deviceName);
+    // printf(physical_device_properties.limits.max)
 
     render_multisample_flags = get_max_multisample_flags(&physical_device_properties);
 
