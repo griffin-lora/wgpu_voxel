@@ -5,7 +5,6 @@
 #include "gfx/pipeline.h"
 #include "gfx/gfx_util.h"
 #include "gfx/voxel_generation_compute_pipeline.h"
-#include "gfx/voxel_meshing_compute_pipeline.h"
 #include "util.h"
 #include "result.h"
 #include "voxel.h"
@@ -35,9 +34,6 @@ static VkSampler sampler;
 static VkImage image;
 static VmaAllocation image_allocation;
 static VkImageView image_view;
-uint32_t num_voxel_vertices;
-VkBuffer voxel_vertex_buffer;
-VmaAllocation voxel_vertex_buffer_allocation;
 
 typedef struct {
     mat4s view_projection;
@@ -266,6 +262,5 @@ void term_voxel_render_pipeline() {
     vmaDestroyImage(allocator, image, image_allocation);
     vkDestroySampler(device, sampler, NULL);
     vmaDestroyBuffer(allocator, uniform_buffer, uniform_buffer_allocation);
-    vmaDestroyBuffer(allocator, voxel_vertex_buffer, voxel_vertex_buffer_allocation);
     destroy_pipeline(&pipeline);
 }

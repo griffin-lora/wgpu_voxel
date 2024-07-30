@@ -3,7 +3,6 @@
 #include "gfx/default.h"
 #include "gfx/gfx_util.h"
 #include "gfx/voxel_generation_compute_pipeline.h"
-#include "gfx/voxel_meshing_compute_pipeline.h"
 #include "gfx/voxel_render_pipeline.h"
 #include "result.h"
 #include "util.h"
@@ -496,7 +495,6 @@ static result_t init_vk_core(void) {
     VkPhysicalDeviceProperties physical_device_properties;
     vkGetPhysicalDeviceProperties(physical_device, &physical_device_properties);
     printf("Loaded physical device \"%s\"\n", physical_device_properties.deviceName);
-    // printf(physical_device_properties.limits.max)
 
     render_multisample_flags = get_max_multisample_flags(&physical_device_properties);
 
@@ -694,14 +692,10 @@ static result_t init_vk_core(void) {
         return result;
     }
 
-    if ((result = init_voxel_meshing_compute_pipeline()) != result_success) {
-        return result;
-    }
-
     if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
-    if ((result = encode_voxel_generation_compute_pipeline(generic_command_buffer)) != result_success) {
+    if ((result = record_voxel_generation_compute_pipeline(generic_command_buffer)) != result_success) {
         return result;
     }
     microseconds_t start = get_current_microseconds();
@@ -709,26 +703,10 @@ static result_t init_vk_core(void) {
         return result;
     }
     printf("Voxel generation took %ldμs\n", get_current_microseconds() - start);
-
     if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
         return result;
     }
-    if ((result = encode_voxel_meshing_compute_pipeline(generic_command_buffer)) != result_success) {
-        return result;
-    }
-    start = get_current_microseconds();
-    if ((result = submit_and_wait(generic_command_buffer, generic_command_fence)) != result_success) {
-        return result;
-    }
-    if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
-        return result;
-    }
-    printf("Voxel meshing took %ldμs\n", get_current_microseconds() - start);
-
-    if ((result = create_voxel_vertex_buffer(generic_command_buffer, generic_command_fence, &num_voxel_vertices, &voxel_vertex_buffer, &voxel_vertex_buffer_allocation)) != result_success) {
-        return result;
-    }
-
+    
     if ((result = init_voxel_render_pipeline(generic_command_buffer, generic_command_fence, &physical_device_properties)) != result_success) {
         return result;
     }
@@ -740,7 +718,6 @@ static void term_vk_core(void) {
     vkDeviceWaitIdle(device);
     term_voxel_render_pipeline();
     term_voxel_generation_compute_pipeline();
-    term_voxel_meshing_compute_pipeline();
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
     vkDestroyCommandPool(device, command_pool, NULL);

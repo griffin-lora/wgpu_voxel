@@ -93,7 +93,7 @@ result_t init_voxel_generation_compute_pipeline(void) {
     return result_success;
 }
 
-result_t encode_voxel_generation_compute_pipeline(VkCommandBuffer command_buffer) {
+result_t record_voxel_generation_compute_pipeline(VkCommandBuffer command_buffer) {
     if (vkBeginCommandBuffer(command_buffer, &(VkCommandBufferBeginInfo) {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
