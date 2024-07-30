@@ -767,12 +767,13 @@ static void term_glfw_core(void) {
 }
 
 result_t draw_gfx(void) {
+    microseconds_t start = get_current_microseconds();
+
     result_t result;
 
     VkSemaphore image_available_semaphore = image_available_semaphores[frame_index];
     VkSemaphore render_finished_semaphore = render_finished_semaphores[frame_index];
     VkFence in_flight_fence = in_flight_fences[frame_index];
-
     vkWaitForFences(device, 1, &in_flight_fence, VK_TRUE, UINT64_MAX);
 
     uint32_t image_index;
@@ -873,6 +874,7 @@ result_t draw_gfx(void) {
 
     frame_index += 1;
     frame_index %= NUM_FRAMES_IN_FLIGHT;
+    printf("Frame took %ldμs\n", get_current_microseconds() - start);
 
     return result_success;
 }
