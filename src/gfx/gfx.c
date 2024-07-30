@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -74,7 +75,9 @@ static const char* layers[] = {
 };
 
 static const char* extensions[] = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    VK_EXT_MESH_SHADER_EXTENSION_NAME,
+    VK_KHR_SPIRV_1_4_EXTENSION_NAME
 };
 
 static result_t check_layers(void) {
@@ -159,12 +162,6 @@ static result_t get_physical_device(uint32_t num_physical_devices, const VkPhysi
         VkPhysicalDeviceProperties physical_device_properties;
         vkGetPhysicalDeviceProperties(physical_device, &physical_device_properties);
         if (physical_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU || physical_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU || physical_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_OTHER) {
-            continue;
-        }
-
-        VkFormatProperties format_properties;
-        vkGetPhysicalDeviceFormatProperties(physical_device, VK_FORMAT_R8G8B8_SRGB, &format_properties);
-        if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
             continue;
         }
 
@@ -463,7 +460,7 @@ static result_t init_vk_core(void) {
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName = "No Engine",
             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-            .apiVersion = VK_API_VERSION_1_0
+            .apiVersion = VK_API_VERSION_1_3
         },
         .enabledExtensionCount = num_instance_extensions,
         .ppEnabledExtensionNames = instance_extensions,
