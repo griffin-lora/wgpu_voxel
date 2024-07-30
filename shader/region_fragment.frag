@@ -1,6 +1,6 @@
 #version 460
 
-layout(binding = 2) uniform sampler2DArray color_sampler;
+layout(set = 0, binding = 0) uniform sampler2DArray color_sampler;
 
 layout(location = 0) in vec3 vertex_texel_coord;
 

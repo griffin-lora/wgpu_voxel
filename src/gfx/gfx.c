@@ -7,6 +7,7 @@
 #include "result.h"
 #include "util.h"
 #include "vk_init.h"
+#include "voxel/region_management.h"
 #include <GLFW/glfw3.h>
 #include <cglm/types-struct.h>
 #include <stdio.h>
@@ -696,6 +697,10 @@ static result_t init_vk_core(void) {
 
     vk_init_proc();
 
+    if ((result = init_region_management()) != result_success) {
+        return result;
+    }
+
     if ((result = init_region_generation_compute_pipeline()) != result_success) {
         return result;
     }
@@ -726,6 +731,7 @@ static void term_vk_core(void) {
     vkDeviceWaitIdle(device);
     term_region_render_pipeline();
     term_region_generation_compute_pipeline();
+    term_region_management();
 
     vkDestroyRenderPass(device, frame_render_pass, NULL);
     vkDestroyCommandPool(device, command_pool, NULL);

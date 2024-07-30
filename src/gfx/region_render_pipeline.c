@@ -7,6 +7,7 @@
 #include "gfx/region_generation_compute_pipeline.h"
 #include "util.h"
 #include "result.h"
+#include "voxel/region_management.h"
 #include <cglm/types-struct.h>
 #include <math.h>
 #include <stdint.h>
@@ -26,8 +27,6 @@ static const char* color_image_layer_paths[NUM_COLOR_IMAGE_LAYERS] = {
 };
 
 static pipeline_t pipeline;
-static VkBuffer uniform_buffer;
-static VmaAllocation uniform_buffer_allocation;
 static VkSampler voxel_sampler;
 static VkSampler color_sampler;
 static VkImage color_image;
@@ -37,15 +36,6 @@ static VkImageView color_image_view;
 typedef struct {
     mat4s view_projection;
 } push_constants_t;
-
-typedef struct {
-    vec3s region_position;
-} uniform_t;
-
-#define NUM_UNIFORMS 16
-
-static void* uniforms_mapped;
-static uint32_t uniform_stride;
 
 result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence command_fence, const VkPhysicalDeviceProperties* physical_device_properties) {
     result_t result;
@@ -107,21 +97,6 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
         .maxLod = (float)num_mip_levels
     }, NULL, &color_sampler) != VK_SUCCESS) {
         return result_sampler_create_failure;
-    }
-
-    uniform_stride = ceil_to_next_multiple(sizeof(uniform_t), (uint32_t)physical_device_properties->limits.minUniformBufferOffsetAlignment);
-
-    uint32_t uniforms_num_bytes = NUM_UNIFORMS * uniform_stride;
-
-    if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
-        DEFAULT_VK_UNIFORM_BUFFER,
-        .size = uniforms_num_bytes
-    }, &shared_write_allocation_create_info, &uniform_buffer, &uniform_buffer_allocation, NULL) != VK_SUCCESS) {
-        return result_buffer_create_failure;
-    }
-
-    if (vmaMapMemory(allocator, uniform_buffer_allocation, &uniforms_mapped) != VK_SUCCESS) {
-        return result_memory_map_failure;
     }
 
     if (vkCreateSampler(device, &(VkSamplerCreateInfo) {
@@ -260,10 +235,6 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
     vkDestroyShaderModule(device, mesh_shader_module, NULL);
     vkDestroyShaderModule(device, fragment_shader_module, NULL);
 
-    for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
-        ((uniform_t*) (uniforms_mapped + (i * uniform_stride)))->region_position = (vec3s) {{ 16.0f * (float) i, 0.0f, 0.0f }};
-    }
-
     return result_success;
 }
 
@@ -274,8 +245,8 @@ result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
     mat4s view_projection = get_view_projection();
     vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(push_constants_t), &view_projection);
 
-    for (uint32_t i = 0; i < NUM_UNIFORMS; i++) {
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &pipeline.descriptor_set, 1, (uint32_t[1]) { i * uniform_stride });
+    for (uint32_t i = 0; i < NUM_REGIONS; i++) {
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 1, &region_render_pipeline_infos[i].render_descriptor_set, 0, NULL);
         vkCmdDrawMeshTasksEXT(command_buffer, 8, 8, 8);
     }
 
@@ -283,12 +254,9 @@ result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
 }
 
 void term_region_render_pipeline() {
-    vmaUnmapMemory(allocator, uniform_buffer_allocation);
-
     vkDestroyImageView(device, color_image_view, NULL);
     vmaDestroyImage(allocator, color_image, color_image_allocation);
     vkDestroySampler(device, color_sampler, NULL);
-    vmaDestroyBuffer(allocator, uniform_buffer, uniform_buffer_allocation);
     vkDestroySampler(device, voxel_sampler, NULL);
     destroy_pipeline(&pipeline);
 }
