@@ -2,16 +2,20 @@
 #include "gfx/default.h"
 #include "gfx/gfx.h"
 #include "gfx/region_generation_compute_pipeline.h"
+#include "gfx/region_meshing_compute_pipeline.h"
 #include "gfx/region_render_pipeline.h"
 #include "result.h"
 #include "voxel/region.h"
 #include <vulkan/vulkan_core.h>
 
+region_mesh_state_t region_mesh_states[NUM_REGIONS];
+
 region_allocation_info_t region_allocation_infos[NUM_REGIONS];
 region_generation_compute_pipeline_info_t region_generation_compute_pipeline_infos[NUM_REGIONS];
+region_meshing_compute_pipeline_info_t region_meshing_compute_pipeline_infos[NUM_REGIONS];
 region_render_pipeline_info_t region_render_pipeline_infos[NUM_REGIONS];
 
-static VkDescriptorPool region_descriptor_pool;
+static VkDescriptorPool descriptor_pool;
 
 typedef struct {
     ivec3s region_position;
@@ -35,13 +39,17 @@ result_t init_region_management(void) {
                 .descriptorCount = 1
             }
         },
-        .maxSets = NUM_REGIONS * 2
-    }, NULL, &region_descriptor_pool) != VK_SUCCESS) {
+        .maxSets = NUM_REGIONS * 3
+    }, NULL, &descriptor_pool) != VK_SUCCESS) {
         return result_descriptor_pool_create_failure;
     }
 
     for (size_t region_index = 0; region_index < NUM_REGIONS; region_index++) {
         region_allocation_info_t* allocation_info = &region_allocation_infos[region_index];
+
+        // Set these to NULL so we don't accidentally destroy NULL buffers later
+        allocation_info->vertex_buffer = NULL;
+        allocation_info->vertex_buffer_allocation = NULL;
 
         if (vmaCreateImage(allocator, &(VkImageCreateInfo) {
             DEFAULT_VK_IMAGE,
@@ -76,17 +84,18 @@ result_t init_region_management(void) {
         }
         
         *uniform = (region_uniform_t) {
-            .region_position = (ivec3s) {{ 16 * (int32_t) (region_index / 16), 0, 16 * (int32_t) (region_index % 16) }}
+            .region_position = (ivec3s) {{ (int32_t) REGION_SIZE * (int32_t) (region_index / 16), 0, (int32_t) REGION_SIZE * (int32_t) (region_index % 16) }}
         };
 
         vmaUnmapMemory(allocator, allocation_info->uniform_buffer_allocation);
 
         if (vkAllocateDescriptorSets(device, &(VkDescriptorSetAllocateInfo) {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorPool = region_descriptor_pool,
-            .descriptorSetCount = 2,
-            .pSetLayouts = (VkDescriptorSetLayout[2]) {
+            .descriptorPool = descriptor_pool,
+            .descriptorSetCount = 3,
+            .pSetLayouts = (VkDescriptorSetLayout[3]) {
                 region_generation_compute_pipeline_set_layout,
+                region_meshing_compute_pipeline_set_layout,
                 region_render_pipeline_set_layout
             }
         }, allocation_info->descriptor_sets) != VK_SUCCESS) {
@@ -134,7 +143,7 @@ result_t init_region_management(void) {
             },
             {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = allocation_info->descriptor_sets[1],
+                .dstSet = allocation_info->descriptor_sets[2],
                 .dstBinding = 1,
                 .dstArrayElement = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -147,15 +156,22 @@ result_t init_region_management(void) {
             }
         }, 0, NULL);
 
+        region_mesh_states[region_index] = region_mesh_state_await_meshing_compute;
+
         region_generation_compute_pipeline_info_t* generation_compute_pipeline_info = &region_generation_compute_pipeline_infos[region_index];
+        region_meshing_compute_pipeline_info_t* meshing_compute_pipeline_info = &region_meshing_compute_pipeline_infos[region_index];
         region_render_pipeline_info_t* render_pipeline_info = &region_render_pipeline_infos[region_index];
 
         *generation_compute_pipeline_info = (region_generation_compute_pipeline_info_t) {
             .descriptor_set = allocation_info->descriptor_sets[0],
             .voxel_image = allocation_info->voxel_image
         };
+        *meshing_compute_pipeline_info = (region_meshing_compute_pipeline_info_t) {
+            .descriptor_set = allocation_info->descriptor_sets[1]
+        };
         *render_pipeline_info = (region_render_pipeline_info_t) {
             .descriptor_set = allocation_info->descriptor_sets[1],
+            .vertex_buffer = NULL
         };
     }
 
@@ -163,12 +179,15 @@ result_t init_region_management(void) {
 }
 
 void term_region_management(void) {
-    vkDestroyDescriptorPool(device, region_descriptor_pool, NULL);
+    vkDestroyDescriptorPool(device, descriptor_pool, NULL);
 
     for (size_t region_index = 0; region_index < NUM_REGIONS; region_index++) {
         region_allocation_info_t* allocation_info = &region_allocation_infos[region_index];
 
         vmaDestroyBuffer(allocator, allocation_info->uniform_buffer, allocation_info->uniform_buffer_allocation);
+        if (allocation_info->vertex_buffer != NULL && allocation_info->vertex_buffer_allocation != NULL) {
+            vmaDestroyBuffer(allocator, allocation_info->vertex_buffer, allocation_info->vertex_buffer_allocation);
+        }
         vkDestroyImageView(device, allocation_info->voxel_image_view, NULL);
         vmaDestroyImage(allocator, allocation_info->voxel_image, allocation_info->voxel_image_allocation);
     }

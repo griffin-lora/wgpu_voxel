@@ -1,0 +1,72 @@
+#version 460
+#include "voxel.glsl"
+
+struct region_vertex_t {
+    vec3 vertex_position;
+    uint vertex_index;
+    uint voxel_type;
+};
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+layout(set = 0, binding = 0) writeonly buffer num_vertices_out_t {
+    uint num_vertices;
+};
+
+layout(set = 0, binding = 1) writeonly buffer vertices_out_t {
+    layout(align = 32) region_vertex_t vertices[];
+};
+
+layout(set = 1, binding = 0) uniform usampler3D voxel_sampler;
+
+void add_face_vertices(vec3 voxel_position, uint voxel_type, uint vertices_index, uint face_index) {
+    for (int i = 0; i < NUM_CUBE_VOXEL_FACE_VERTICES; i++) {
+        vertices[vertices_index + i] = region_vertex_t(voxel_position, NUM_CUBE_VOXEL_FACE_VERTICES * face_index + i, voxel_type);
+    }
+}
+
+void main() {
+    ivec3 voxel_sampler_position = ivec3(gl_GlobalInvocationID);
+
+    uint voxel_type = texelFetch(voxel_sampler, voxel_sampler_position, 0).x;
+    
+    if (voxel_type == 0) {
+        return;
+    }
+
+    bool px_visible = texelFetch(voxel_sampler, voxel_sampler_position + ivec3(1, 0, 0), 0).x == 0;
+    bool nx_visible = texelFetch(voxel_sampler, voxel_sampler_position - ivec3(1, 0, 0), 0).x == 0;
+    bool py_visible = texelFetch(voxel_sampler, voxel_sampler_position + ivec3(0, 1, 0), 0).x == 0;
+    bool ny_visible = texelFetch(voxel_sampler, voxel_sampler_position - ivec3(0, 1, 0), 0).x == 0;
+    bool pz_visible = texelFetch(voxel_sampler, voxel_sampler_position + ivec3(0, 0, 1), 0).x == 0;
+    bool nz_visible = texelFetch(voxel_sampler, voxel_sampler_position - ivec3(0, 0, 1), 0).x == 0;
+
+    vec3 voxel_position = vec3(gl_GlobalInvocationID);
+
+    uint num_voxel_vertices = NUM_CUBE_VOXEL_FACE_VERTICES * (uint(px_visible) + uint(nx_visible) + uint(py_visible) + uint(ny_visible) + uint(pz_visible) + uint(nz_visible));
+    uint vertices_index = atomicAdd(num_vertices, num_voxel_vertices);
+
+    if (px_visible) {
+        add_face_vertices(voxel_position, voxel_type, vertices_index, VOXEL_PX_FACE_INDEX);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
+    }
+    if (nx_visible) {
+        add_face_vertices(voxel_position, voxel_type, vertices_index, VOXEL_NX_FACE_INDEX);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
+    }
+    if (py_visible) {
+        add_face_vertices(voxel_position, voxel_type, vertices_index, VOXEL_PY_FACE_INDEX);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
+    }
+    if (ny_visible) {
+        add_face_vertices(voxel_position, voxel_type, vertices_index, VOXEL_NY_FACE_INDEX);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
+    }
+    if (pz_visible) {
+        add_face_vertices(voxel_position, voxel_type, vertices_index, VOXEL_PZ_FACE_INDEX);
+        vertices_index += NUM_CUBE_VOXEL_FACE_VERTICES;
+    }
+    if (nz_visible) {
+        add_face_vertices(voxel_position, voxel_type, vertices_index, VOXEL_NZ_FACE_INDEX);
+    }
+}

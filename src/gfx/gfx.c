@@ -3,6 +3,7 @@
 #include "gfx/default.h"
 #include "gfx/gfx_util.h"
 #include "gfx/region_generation_compute_pipeline.h"
+#include "gfx/region_meshing_compute_pipeline.h"
 #include "gfx/region_render_pipeline.h"
 #include "result.h"
 #include "util.h"
@@ -715,6 +716,10 @@ static result_t init_vk_core(void) {
     vk_init_proc();
 
     if ((result = init_region_generation_compute_pipeline()) != result_success) {
+        return result;
+    }
+
+    if ((result = init_region_meshing_compute_pipeline(&physical_device_properties)) != result_success) {
         return result;
     }
     

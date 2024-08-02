@@ -4,6 +4,7 @@
 #include "gfx/default.h"
 #include "gfx/pipeline.h"
 #include "gfx/gfx_util.h"
+#include "gfx/region_meshing_compute_pipeline.h"
 #include "util.h"
 #include "result.h"
 #include "voxel/region_management.h"
@@ -27,7 +28,6 @@ static const char* color_image_layer_paths[NUM_COLOR_IMAGE_LAYERS] = {
 };
 
 static pipeline_t pipeline;
-VkSampler voxel_sampler;
 static VkSampler color_sampler;
 static VkImage color_image;
 static VmaAllocation color_image_allocation;
@@ -102,29 +102,9 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
     }, NULL, &color_sampler) != VK_SUCCESS) {
         return result_sampler_create_failure;
     }
-
-    if (vkCreateSampler(device, &(VkSamplerCreateInfo) {
-        DEFAULT_VK_SAMPLER,
-        .maxAnisotropy = physical_device_properties->limits.maxSamplerAnisotropy,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .unnormalizedCoordinates = VK_TRUE,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
-        .minFilter = VK_FILTER_NEAREST,
-        .magFilter = VK_FILTER_NEAREST,
-        .anisotropyEnable = VK_FALSE,
-        .maxLod = 0.0f
-    }, NULL, &voxel_sampler) != VK_SUCCESS) {
-        return result_sampler_create_failure;
-    }
     
-    VkShaderModule task_shader_module;
-    if ((result = create_shader_module("shader/region_task.spv", &task_shader_module)) != result_success) {
-        return result;
-    }
-    VkShaderModule mesh_shader_module;
-    if ((result = create_shader_module("shader/region_mesh.spv", &mesh_shader_module)) != result_success) {
+    VkShaderModule vertex_shader_module;
+    if ((result = create_shader_module("shader/region_vertex.spv", &vertex_shader_module)) != result_success) {
         return result;
     }
     VkShaderModule fragment_shader_module;
@@ -174,14 +154,8 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
 
     if (vkCreateDescriptorSetLayout(device, &(VkDescriptorSetLayoutCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 2,
-        .pBindings = (VkDescriptorSetLayoutBinding[2]) {
-            {
-                DEFAULT_VK_DESCRIPTOR_BINDING,
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT
-            },
+        .bindingCount = 1,
+        .pBindings = (VkDescriptorSetLayoutBinding[1]) {
             {
                 DEFAULT_VK_DESCRIPTOR_BINDING,
                 .binding = 1,
@@ -212,17 +186,12 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &(VkGraphicsPipelineCreateInfo) {
         DEFAULT_VK_GRAPHICS_PIPELINE,
 
-        .stageCount = 3,
-        .pStages = (VkPipelineShaderStageCreateInfo[3]) {
+        .stageCount = 2,
+        .pStages = (VkPipelineShaderStageCreateInfo[2]) {
             {
                 DEFAULT_VK_SHADER_STAGE,
-                .stage = VK_SHADER_STAGE_TASK_BIT_EXT,
-                .module = task_shader_module
-            },
-            {
-                DEFAULT_VK_SHADER_STAGE,
-                .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
-                .module = mesh_shader_module
+                .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                .module = vertex_shader_module
             },
             {
                 DEFAULT_VK_SHADER_STAGE,
@@ -231,7 +200,40 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
             }
         },
 
-        .pVertexInputState = NULL,
+        .pVertexInputState = &(VkPipelineVertexInputStateCreateInfo) {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        
+            .vertexBindingDescriptionCount = 1,
+            .pVertexBindingDescriptions = (VkVertexInputBindingDescription[1]) {
+                {
+                    .binding = 0,
+                    .stride = sizeof(region_vertex_t),
+                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+                }
+            },
+
+            .vertexAttributeDescriptionCount = 3,
+            .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[3]) {
+                {
+                    .binding = 0,
+                    .location = 0,
+                    .format = VK_FORMAT_R32G32B32_SFLOAT,
+                    .offset = offsetof(region_vertex_t, vertex_position)
+                },
+                {
+                    .binding = 0,
+                    .location = 1,
+                    .format = VK_FORMAT_R32_UINT,
+                    .offset = offsetof(region_vertex_t, vertex_index)
+                },
+                {
+                    .binding = 0,
+                    .location = 2,
+                    .format = VK_FORMAT_R32_UINT,
+                    .offset = offsetof(region_vertex_t, voxel_type)
+                }
+            }
+        },
         .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo) { DEFAULT_VK_RASTERIZATION },
         .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo) {
             DEFAULT_VK_MULTISAMPLE,
@@ -243,8 +245,7 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
         return result_graphics_pipelines_create_failure;
     }
     
-    vkDestroyShaderModule(device, task_shader_module, NULL);
-    vkDestroyShaderModule(device, mesh_shader_module, NULL);
+    vkDestroyShaderModule(device, vertex_shader_module, NULL);
     vkDestroyShaderModule(device, fragment_shader_module, NULL);
 
     return result_success;
@@ -259,7 +260,7 @@ result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
 
     for (uint32_t i = 0; i < NUM_REGIONS; i++) {
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 2, (VkDescriptorSet[2]) { descriptor_set, region_render_pipeline_infos[i].descriptor_set }, 0, NULL);
-        vkCmdDrawMeshTasksEXT(command_buffer, 8, 8, 8);
+        vkCmdDrawMeshTasksEXT(command_buffer, 16, 16, 16);
     }
 
     return result_success;
