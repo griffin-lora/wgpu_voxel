@@ -158,9 +158,9 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
         .pBindings = (VkDescriptorSetLayoutBinding[1]) {
             {
                 DEFAULT_VK_DESCRIPTOR_BINDING,
-                .binding = 1,
+                .binding = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
             }
         }
     }, NULL, &region_render_pipeline_set_layout) != VK_SUCCESS) {
@@ -176,7 +176,7 @@ result_t init_region_render_pipeline(VkCommandBuffer command_buffer, VkFence com
         },
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &(VkPushConstantRange) {
-            .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .size = sizeof(push_constants_t)
         }
     }, NULL, &pipeline.pipeline_layout) != VK_SUCCESS) {
@@ -256,11 +256,19 @@ result_t draw_region_render_pipeline(VkCommandBuffer command_buffer) {
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
     mat4s view_projection = get_view_projection();
-    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(push_constants_t), &view_projection);
+    vkCmdPushConstants(command_buffer, pipeline.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants_t), &view_projection);
 
     for (uint32_t i = 0; i < NUM_REGIONS; i++) {
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 2, (VkDescriptorSet[2]) { descriptor_set, region_render_pipeline_infos[i].descriptor_set }, 0, NULL);
-        vkCmdDrawMeshTasksEXT(command_buffer, 16, 16, 16);
+        region_render_pipeline_info_t* info = &region_render_pipeline_infos[i];
+
+        if (info->vertex_buffer == NULL) {
+            continue;
+        }
+
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline_layout, 0, 2, (VkDescriptorSet[2]) { descriptor_set, info->descriptor_set }, 0, NULL);
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &info->vertex_buffer, (VkDeviceSize[1]) { 0 });
+
+        vkCmdDraw(command_buffer, info->num_vertices, 1, 0, 0);
     }
 
     return result_success;

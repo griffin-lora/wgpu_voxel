@@ -28,6 +28,7 @@ typedef struct {
 
 typedef struct {
     VkDescriptorSet descriptor_set;
+    uint32_t num_vertices;
     VkBuffer vertex_buffer;
 } region_render_pipeline_info_t;
 

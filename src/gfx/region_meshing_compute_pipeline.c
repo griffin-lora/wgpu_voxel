@@ -4,6 +4,7 @@
 #include "gfx/gfx_util.h"
 #include "gfx/pipeline.h"
 #include "result.h"
+#include "util.h"
 #include "voxel/region.h"
 #include "voxel/region_management.h"
 #include "voxel/voxel.h"
@@ -32,8 +33,14 @@ VkSampler voxel_sampler;
 
 static VkDescriptorPool descriptor_pool;
 
+static size_t vertex_count_stride;
+static size_t vertex_staging_stride;
+
 result_t init_region_meshing_compute_pipeline(const VkPhysicalDeviceProperties* physical_device_properties) {
     result_t result;
+
+    vertex_count_stride = ceil_to_next_multiple(sizeof(uint32_t), (uint32_t) physical_device_properties->limits.minStorageBufferOffsetAlignment);
+    vertex_staging_stride = ceil_to_next_multiple(NUM_CUBE_VOXEL_VERTICES * REGION_SIZE * REGION_SIZE * REGION_SIZE * sizeof(region_vertex_t), (uint32_t) physical_device_properties->limits.minStorageBufferOffsetAlignment);
 
     if (vkCreateDescriptorPool(device, &(VkDescriptorPoolCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -69,7 +76,7 @@ result_t init_region_meshing_compute_pipeline(const VkPhysicalDeviceProperties* 
     if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
         DEFAULT_VK_BUFFER,
         .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        .size = sizeof(uint32_t) * NUM_STAGINGS
+        .size = NUM_STAGINGS * vertex_count_stride
     }, &shared_read_allocation_create_info, &vertex_count_buffer, &vertex_count_buffer_allocation, NULL) != VK_SUCCESS) {
         return result_buffer_create_failure;
     }
@@ -77,7 +84,7 @@ result_t init_region_meshing_compute_pipeline(const VkPhysicalDeviceProperties* 
     if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
         DEFAULT_VK_BUFFER,
         .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        .size = NUM_CUBE_VOXEL_VERTICES * REGION_SIZE * REGION_SIZE * REGION_SIZE * sizeof(region_vertex_t) * NUM_STAGINGS
+        .size = NUM_STAGINGS * vertex_staging_stride
     }, &device_allocation_create_info, &vertex_staging_buffer, &vertex_staging_buffer_allocation, NULL) != VK_SUCCESS) {
         return result_buffer_create_failure;
     }
@@ -108,16 +115,16 @@ result_t init_region_meshing_compute_pipeline(const VkPhysicalDeviceProperties* 
         return result_descriptor_set_layout_create_failure;
     }
 
-    if (vkAllocateDescriptorSets(device, &(VkDescriptorSetAllocateInfo) {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = descriptor_pool,
-        .descriptorSetCount = NUM_STAGINGS,
-        .pSetLayouts = &descriptor_set_layout
-    }, staging_descriptor_sets) != VK_SUCCESS) {
-        return result_descriptor_sets_allocate_failure;
-    }
-
     for (size_t i = 0; i < NUM_STAGINGS; i++) {
+        if (vkAllocateDescriptorSets(device, &(VkDescriptorSetAllocateInfo) {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = descriptor_pool,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &descriptor_set_layout
+        }, &staging_descriptor_sets[i]) != VK_SUCCESS) {
+            return result_descriptor_sets_allocate_failure;
+        }
+
         vkUpdateDescriptorSets(device, 2, (VkWriteDescriptorSet[2]) {
             {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -128,8 +135,8 @@ result_t init_region_meshing_compute_pipeline(const VkPhysicalDeviceProperties* 
                 .descriptorCount = 1,
                 .pBufferInfo = &(VkDescriptorBufferInfo) {
                     .buffer = vertex_count_buffer,
-                    .offset = sizeof(uint32_t) * i,
-                    .range = sizeof(uint32_t)
+                    .offset = vertex_count_stride * i,
+                    .range = vertex_count_stride
                 }
             },
             {
@@ -141,8 +148,8 @@ result_t init_region_meshing_compute_pipeline(const VkPhysicalDeviceProperties* 
                 .descriptorCount = 1,
                 .pBufferInfo = &(VkDescriptorBufferInfo) {
                     .buffer = vertex_staging_buffer,
-                    .offset = NUM_CUBE_VOXEL_VERTICES * REGION_SIZE * REGION_SIZE * REGION_SIZE * sizeof(region_vertex_t) * i,
-                    .range = NUM_CUBE_VOXEL_VERTICES * REGION_SIZE * REGION_SIZE * REGION_SIZE * sizeof(region_vertex_t)
+                    .offset = vertex_staging_stride * i,
+                    .range = vertex_staging_stride
                 }
             }
         }, 0, NULL);
@@ -156,7 +163,7 @@ result_t init_region_meshing_compute_pipeline(const VkPhysicalDeviceProperties* 
                 DEFAULT_VK_DESCRIPTOR_BINDING,
                 .binding = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
             }
         }
     }, NULL, &region_meshing_compute_pipeline_set_layout) != VK_SUCCESS) {
@@ -213,7 +220,7 @@ result_t record_region_meshing_compute_pipeline(VkCommandBuffer command_buffer) 
         region_mesh_states[region_index] = region_mesh_state_await_vertex_buffer_creation;
         
         // Clear the vertex count buffer since it is reused
-        vkCmdFillBuffer(command_buffer, vertex_count_buffer, sizeof(uint32_t) * staging_index, sizeof(uint32_t), 0);
+        vkCmdFillBuffer(command_buffer, vertex_count_buffer, vertex_count_stride * staging_index, vertex_count_stride, 0);
         
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 2, (VkDescriptorSet[2]) { staging_descriptor_sets[staging_index], region_meshing_compute_pipeline_infos[region_index].descriptor_set }, 0, NULL);
 
@@ -234,11 +241,15 @@ result_t create_vertex_buffers_for_awaiting_regions(VkCommandBuffer command_buff
 
     uint32_t num_vertices_array[NUM_STAGINGS];
     {
-        uint32_t* num_vertices_array_mapped;
-        if (vmaMapMemory(allocator, vertex_count_buffer_allocation, (void**) &num_vertices_array_mapped) != VK_SUCCESS) {
+        const uint8_t* vertex_count_buffer_mapped;
+        if (vmaMapMemory(allocator, vertex_count_buffer_allocation, (void**) &vertex_count_buffer_mapped) != VK_SUCCESS) {
             return result_memory_map_failure;
         }
-        memcpy(num_vertices_array, num_vertices_array_mapped, sizeof(uint32_t) * NUM_STAGINGS);
+
+        for (size_t i = 0; i < NUM_STAGINGS; i++) {
+            num_vertices_array[i] = *(const uint32_t*) &vertex_count_buffer_mapped[vertex_count_stride * i];
+        }
+
         vmaUnmapMemory(allocator, vertex_count_buffer_allocation);
     }
 
@@ -263,22 +274,28 @@ result_t create_vertex_buffers_for_awaiting_regions(VkCommandBuffer command_buff
             continue;
         }
         region_mesh_states[region_index] = region_mesh_state_completed;
+        
+        uint32_t num_vertices = num_vertices_array[staging_index];
 
         region_allocation_info_t* allocation_info = &region_allocation_infos[region_index];
         
         if (vmaCreateBuffer(allocator, &(VkBufferCreateInfo) {
             DEFAULT_VK_VERTEX_BUFFER,
-            .size = num_vertices_array[staging_index] * sizeof(region_vertex_t)
+            .size = num_vertices * sizeof(region_vertex_t)
         }, &device_allocation_create_info, &allocation_info->vertex_buffer, &allocation_info->vertex_buffer_allocation, NULL) != VK_SUCCESS) {
             return result_buffer_create_failure;
         }
 
         vkCmdCopyBuffer(command_buffer, vertex_staging_buffer, allocation_info->vertex_buffer, 1, &(VkBufferCopy) {
             .srcOffset = NUM_CUBE_VOXEL_VERTICES * REGION_SIZE * REGION_SIZE * REGION_SIZE * sizeof(region_vertex_t) * staging_index,
-            .size = num_vertices_array[staging_index] * sizeof(region_vertex_t)
+            .size = num_vertices * sizeof(region_vertex_t)
         });
 
         region_render_pipeline_infos[region_index].vertex_buffer = allocation_info->vertex_buffer;
+
+        region_render_pipeline_info_t* render_pipeline_info = &region_render_pipeline_infos[region_index];
+        render_pipeline_info->num_vertices = num_vertices;
+        render_pipeline_info->vertex_buffer = allocation_info->vertex_buffer;
 
         staging_index++;
     }

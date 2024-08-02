@@ -90,7 +90,7 @@ result_t record_region_generation_compute_pipeline(VkCommandBuffer command_buffe
 
         vkCmdDispatch(command_buffer, 8, 8, 8);
 
-        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
+        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &(VkImageMemoryBarrier) {
             DEFAULT_VK_IMAGE_MEMORY_BARRIER,
             .image = info->voxel_image,
             .oldLayout = VK_IMAGE_LAYOUT_GENERAL,

@@ -144,7 +144,7 @@ result_t init_region_management(void) {
             {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .dstSet = allocation_info->descriptor_sets[2],
-                .dstBinding = 1,
+                .dstBinding = 0,
                 .dstArrayElement = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = 1,
@@ -170,7 +170,7 @@ result_t init_region_management(void) {
             .descriptor_set = allocation_info->descriptor_sets[1]
         };
         *render_pipeline_info = (region_render_pipeline_info_t) {
-            .descriptor_set = allocation_info->descriptor_sets[1],
+            .descriptor_set = allocation_info->descriptor_sets[2],
             .vertex_buffer = NULL
         };
     }
