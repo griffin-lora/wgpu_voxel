@@ -56,7 +56,7 @@ layout(push_constant, std430) uniform push_constants_t {
 };
 
 layout(set = 1, binding = 0) uniform uniform_t {
-    vec3 region_position;
+    uvec3 region_position;
 };
 
 layout(location = 0) in vec3 vertex_position;
@@ -82,7 +82,7 @@ float get_layer_index() {
 
 void main() {
     vertex_t vertex = cube_vertices[vertex_index];
-    vec3 position = region_position + vertex_position + vertex.position;
+    vec3 position = vec3(region_position) + vertex_position + vertex.position;
 
     gl_Position = view_projection * vec4(position, 1.0);
     vertex_texel_coord = vec3(vertex.texel_coord, get_layer_index());

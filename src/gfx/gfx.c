@@ -743,6 +743,26 @@ static result_t init_vk_core(void) {
         return result;
     }
 
+    for (size_t i = 0; i < NUM_REGIONS / 8; i++) {
+        if ((result = record_region_meshing_compute_pipeline(generic_command_buffer)) != result_success) {
+            return result;
+        }
+        microseconds_t start = get_current_microseconds();
+        if ((result = submit_and_wait(generic_command_buffer, generic_command_fence)) != result_success) {
+            return result;
+        }
+        printf("Voxel meshing took %ldμs\n", get_current_microseconds() - start);
+        if ((result = reset_command_processing(generic_command_buffer, generic_command_fence)) != result_success) {
+            return result;
+        }
+
+        start = get_current_microseconds();
+        if ((result = create_vertex_buffers_for_awaiting_regions(generic_command_buffer, generic_command_fence)) != result_success) {
+            return result;
+        }
+        printf("Voxel mesh count read back took %ldμs\n", get_current_microseconds() - start);
+    }
+
     return result_success;
 }
 
@@ -750,6 +770,7 @@ static void term_vk_core(void) {
     vkDeviceWaitIdle(device);
     term_region_management();
     term_region_render_pipeline();
+    term_region_meshing_compute_pipeline();
     term_region_generation_compute_pipeline();
 
     vkDestroyDescriptorPool(device, generic_descriptor_pool, NULL);

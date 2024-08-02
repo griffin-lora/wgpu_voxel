@@ -319,5 +319,8 @@ void term_region_meshing_compute_pipeline(void) {
     vmaDestroyBuffer(allocator, vertex_count_buffer, vertex_count_buffer_allocation);
     vmaDestroyBuffer(allocator, vertex_staging_buffer, vertex_staging_buffer_allocation);
 
+    vkDestroyDescriptorSetLayout(device, region_meshing_compute_pipeline_set_layout, NULL);
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout, NULL);
+    vkDestroySampler(device, voxel_sampler, NULL);
     vkDestroyDescriptorPool(device, descriptor_pool, NULL);
 }

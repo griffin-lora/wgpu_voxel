@@ -281,5 +281,4 @@ void term_region_render_pipeline() {
     vkDestroyImageView(device, color_image_view, NULL);
     vmaDestroyImage(allocator, color_image, color_image_allocation);
     vkDestroySampler(device, color_sampler, NULL);
-    vkDestroySampler(device, voxel_sampler, NULL);
 }
