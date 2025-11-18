@@ -1,7 +1,6 @@
 #include "camera.h"
 #include "gfx/gfx.h"
 #include <GLFW/glfw3.h>
-#include <cglm/struct/cam.h>
 #include <cglm/struct/vec2.h>
 #include <cglm/struct/vec3.h>
 #include <cglm/struct/mat3.h>
@@ -9,6 +8,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include <stdio.h>
+#include <cglm/struct/cam.h>
 
 #define M_TAU ((float)GLM_PI * 2.0f)
 
