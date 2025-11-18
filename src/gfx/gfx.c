@@ -177,6 +177,10 @@ static result_t get_physical_device(uint32_t num_physical_devices, const VkPhysi
             continue;
         }
 
+        if (physical_device_properties.limits.timestampPeriod == 0 || !physical_device_properties.limits.timestampComputeAndGraphics) {
+            continue;
+        }
+
         VkPhysicalDeviceFeatures features;
         vkGetPhysicalDeviceFeatures(physical_device, &features);
 

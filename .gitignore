@@ -1,6 +1,0 @@
-*.elf
-*.o
-*.d
-*.spv
-.vscode
-lib/*
